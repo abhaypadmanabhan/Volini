@@ -3,7 +3,6 @@ from __future__ import annotations
 from dataclasses import dataclass
 from difflib import SequenceMatcher
 import re
-from urllib.parse import quote_plus
 from urllib.request import Request, urlopen
 import json
 import logging
@@ -75,7 +74,7 @@ def _load_nhtsa_makes() -> None:
     try:
         url = "https://vpic.nhtsa.dot.gov/api/vehicles/getallmakes?format=json"
         req = Request(url, headers={"User-Agent": "Volini/1.0"})
-        with urlopen(req, timeout=10) as resp:
+        with urlopen(req, timeout=3) as resp:
             data = json.loads(resp.read().decode("utf-8"))
         _NHTSA_MAKES = [
             item["Make_Name"].strip()

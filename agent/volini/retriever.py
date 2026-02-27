@@ -48,6 +48,7 @@ class CarResearchService:
         lookup_year = current_year + 1
         models = self._fetch_nhtsa_models(vehicle.make)
         model_hint = self._pick_model_name(vehicle, models) if vehicle.model else (models[0] if models else "")
+        subject = f"{vehicle.make} {model_hint}".strip()
         price_hint = self._fetch_price_hint(vehicle, lookup_year)
 
         source_list = [
@@ -56,7 +57,7 @@ class CarResearchService:
         ]
 
         summary = (
-            f"For {vehicle.make} {model_hint}, the newest likely model year is around {lookup_year}. "
+            f"For {subject}, the newest likely model year is around {lookup_year}. "
             f"{price_hint}"
         )
         return {
