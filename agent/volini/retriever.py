@@ -14,6 +14,8 @@ from .voice_style import format_for_speech
 JsonFetcher = Callable[[str], dict[str, Any]]
 TextFetcher = Callable[[str], str]
 
+_nhtsa_cache: dict[str, list[str]] = {}
+
 
 class CarResearchService:
     def __init__(
@@ -45,7 +47,7 @@ class CarResearchService:
         current_year = datetime.now(timezone.utc).year
         lookup_year = current_year + 1
         models = self._fetch_nhtsa_models(vehicle.make)
-        model_hint = self._pick_model_name(vehicle, models)
+        model_hint = self._pick_model_name(vehicle, models) if vehicle.model else (models[0] if models else "")
         price_hint = self._fetch_price_hint(vehicle, lookup_year)
 
         source_list = [
@@ -74,10 +76,13 @@ class CarResearchService:
         return vehicle.model
 
     def _fetch_nhtsa_models(self, make: str) -> list[str]:
+        if make in _nhtsa_cache:
+            return _nhtsa_cache[make]
         url = f"https://vpic.nhtsa.dot.gov/api/vehicles/GetModelsForMake/{quote_plus(make)}?format=json"
         payload = self._fetch_json(url)
-        models = payload.get("Results", [])
-        return [item.get("Model_Name", "") for item in models if item.get("Model_Name")]
+        models = [item.get("Model_Name", "") for item in payload.get("Results", []) if item.get("Model_Name")]
+        _nhtsa_cache[make] = models
+        return models
 
     def _fetch_price_hint(self, vehicle: VehicleMatch, year: int) -> str:
         query = quote_plus(f"{year} {vehicle.make} {vehicle.model} MSRP")
