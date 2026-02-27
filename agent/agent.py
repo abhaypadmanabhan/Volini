@@ -13,6 +13,8 @@ from livekit import agents
 from livekit.agents import AgentServer, AgentSession, Agent, function_tool
 from livekit.plugins import openai, silero
 
+from volini.stt import WhisperSTT
+from volini.tts import KokoroTTS
 from volini.retriever import CarResearchService
 
 load_dotenv(dotenv_path=os.path.join(os.path.dirname(os.path.abspath(__file__)), ".env"))
@@ -48,13 +50,9 @@ async def my_agent(ctx: agents.JobContext):
     logger.info("Setting up AgentSession for room %s", ctx.room.name)
 
     session = AgentSession(
-        stt=openai.STT(model="gpt-4o-mini-transcribe", language="en"),
+        stt=WhisperSTT(model="small.en", language="en"),
         llm=openai.LLM(model="gpt-4.1-mini", temperature=0.3),
-        tts=openai.TTS(
-            model="tts-1",
-            voice="nova",
-            speed=0.97,
-        ),
+        tts=KokoroTTS(voice="am_michael", speed=1.0),
         vad=silero.VAD.load(min_silence_duration=0.2),
     )
 
