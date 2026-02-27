@@ -55,7 +55,7 @@ class Assistant(Agent):
 server = AgentServer()
 
 
-@server.rtc_session()
+@server.rtc_session(agent_name="volini")
 async def my_agent(ctx: agents.JobContext):
 
     logger.info("Setting up AgentSession for room %s", ctx.room.name)
