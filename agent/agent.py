@@ -15,7 +15,7 @@ from livekit.plugins import openai, silero
 from volini.domain_guard import classify_domain
 from volini.retriever import CarResearchService
 
-load_dotenv()
+load_dotenv(dotenv_path=os.path.join(os.path.dirname(os.path.abspath(__file__)), ".env"))
 
 logger = logging.getLogger("volini-agent")
 logger.setLevel(logging.INFO)
