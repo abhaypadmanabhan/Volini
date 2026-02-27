@@ -63,7 +63,7 @@ class WhisperSTT(stt.STT):
             return self._whisper
         async with self._lock:
             if self._whisper is None:
-                loop = asyncio.get_event_loop()
+                loop = asyncio.get_running_loop()
                 self._whisper = await loop.run_in_executor(None, self._load_model_sync)
         return self._whisper
 
@@ -82,18 +82,22 @@ class WhisperSTT(stt.STT):
         beam = self._beam_size
 
         def _transcribe() -> tuple[str, str]:
-            segments, info = model.transcribe(  # type: ignore
-                audio_io,
-                language=lang or None,
-                beam_size=beam,
-                vad_filter=False,
-                condition_on_previous_text=False,
-            )
-            text = " ".join(seg.text for seg in segments).strip()
-            detected = info.language or lang or "en"
-            return text, detected
+            try:
+                segments, info = model.transcribe(  # type: ignore
+                    audio_io,
+                    language=lang or None,
+                    beam_size=beam,
+                    vad_filter=False,
+                    condition_on_previous_text=False,
+                )
+                text = " ".join(seg.text for seg in segments).strip()
+                detected = info.language or lang or "en"
+                return text, detected
+            except Exception as exc:
+                logger.exception("faster-whisper transcription failed: %s", exc)
+                raise
 
-        loop = asyncio.get_event_loop()
+        loop = asyncio.get_running_loop()
         text, detected_lang = await loop.run_in_executor(None, _transcribe)
 
         logger.debug("WhisperSTT transcript: %r", text)
