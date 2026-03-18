@@ -1,0 +1,84 @@
+<h2>What kind of blob are we going for?</h2>
+<p class="subtitle">Pick the visual direction that feels right for Volini</p>
+
+<div class="cards">
+
+  <div class="card" data-choice="organic" onclick="toggleSelect(this)">
+    <div class="card-image" style="background:#0a0a0f;display:flex;align-items:center;justify-content:center;height:180px;overflow:hidden;">
+      <svg width="120" height="120" viewBox="0 0 120 120">
+        <defs>
+          <radialGradient id="g1" cx="40%" cy="40%">
+            <stop offset="0%" stop-color="#a78bfa"/>
+            <stop offset="60%" stop-color="#6d28d9"/>
+            <stop offset="100%" stop-color="#1e1b4b"/>
+          </radialGradient>
+        </defs>
+        <path fill="url(#g1)" opacity="0.95">
+          <animate attributeName="d" dur="4s" repeatCount="indefinite"
+            values="M60,20 C85,18 100,35 100,60 C100,85 85,102 60,100 C35,98 18,83 20,60 C22,37 35,22 60,20Z;
+                    M60,16 C88,20 104,38 100,62 C96,86 78,105 60,102 C42,99 18,86 18,62 C18,38 32,12 60,16Z;
+                    M60,20 C85,18 100,35 100,60 C100,85 85,102 60,100 C35,98 18,83 20,60 C22,37 35,22 60,20Z"/>
+        </path>
+        <circle cx="60" cy="60" r="18" fill="white" opacity="0.12"/>
+        <circle cx="48" cy="48" r="7" fill="white" opacity="0.18"/>
+      </svg>
+    </div>
+    <div class="card-body">
+      <h3>A — Organic Morphing Blob</h3>
+      <p>Smooth, rounded blob that breathes and morphs shape. Calm purple → electric blue when speaking, muted gray when idle. Like Siri/Gemini but more raw.</p>
+    </div>
+  </div>
+
+  <div class="card" data-choice="audio" onclick="toggleSelect(this)">
+    <div class="card-image" style="background:#0a0a0f;display:flex;align-items:center;justify-content:center;height:180px;overflow:hidden;">
+      <svg width="180" height="120" viewBox="0 0 180 120">
+        <defs>
+          <linearGradient id="g2" x1="0%" y1="0%" x2="100%" y2="0%">
+            <stop offset="0%" stop-color="#06b6d4"/>
+            <stop offset="50%" stop-color="#3b82f6"/>
+            <stop offset="100%" stop-color="#8b5cf6"/>
+          </linearGradient>
+        </defs>
+        <!-- Waveform bars around a central circle -->
+        <circle cx="90" cy="60" r="28" fill="none" stroke="url(#g2)" stroke-width="2.5" opacity="0.4"/>
+        <circle cx="90" cy="60" r="20" fill="#1e3a5f" opacity="0.8"/>
+        <!-- Radial bars -->
+        <g stroke="url(#g2)" stroke-width="2.5" stroke-linecap="round">
+          <line x1="90" y1="28" x2="90" y2="18"><animate attributeName="y2" values="18;10;18" dur="0.6s" repeatCount="indefinite"/></line>
+          <line x1="112" y1="38" x2="120" y2="30"><animate attributeName="x2" values="120;128;120" dur="0.5s" repeatCount="indefinite"/><animate attributeName="y2" values="30;22;30" dur="0.5s" repeatCount="indefinite"/></line>
+          <line x1="122" y1="60" x2="132" y2="60"><animate attributeName="x2" values="132;142;132" dur="0.7s" repeatCount="indefinite"/></line>
+          <line x1="112" y1="82" x2="120" y2="90"><animate attributeName="x2" values="120;128;120" dur="0.4s" repeatCount="indefinite"/><animate attributeName="y2" values="90;98;90" dur="0.4s" repeatCount="indefinite"/></line>
+          <line x1="90" y1="92" x2="90" y2="102"><animate attributeName="y2" values="102;110;102" dur="0.8s" repeatCount="indefinite"/></line>
+          <line x1="68" y1="82" x2="60" y2="90"><animate attributeName="x2" values="60;52;60" dur="0.55s" repeatCount="indefinite"/><animate attributeName="y2" values="90;98;90" dur="0.55s" repeatCount="indefinite"/></line>
+          <line x1="58" y1="60" x2="48" y2="60"><animate attributeName="x2" values="48;38;48" dur="0.65s" repeatCount="indefinite"/></line>
+          <line x1="68" y1="38" x2="60" y2="30"><animate attributeName="x2" values="60;52;60" dur="0.45s" repeatCount="indefinite"/><animate attributeName="y2" values="30;22;30" dur="0.45s" repeatCount="indefinite"/></line>
+        </g>
+        <circle cx="90" cy="60" r="10" fill="url(#g2)" opacity="0.9"/>
+      </svg>
+    </div>
+    <div class="card-body">
+      <h3>B — Audio Reactive Orb</h3>
+      <p>Central orb with radial spikes that pulse with voice amplitude. Spikes shrink to nothing when idle, go crazy when speaking. Cyan/blue energy aesthetic.</p>
+    </div>
+  </div>
+
+  <div class="card" data-choice="fluid" onclick="toggleSelect(this)">
+    <div class="card-image" style="background:#060608;display:flex;align-items:center;justify-content:center;height:180px;overflow:hidden;position:relative;">
+      <div style="position:absolute;width:100px;height:100px;border-radius:50%;background:conic-gradient(from 0deg,#f59e0b,#ef4444,#ec4899,#8b5cf6,#06b6d4,#f59e0b);filter:blur(1px);opacity:0.85;">
+        <animate attributeName="transform" type="rotate" from="0" to="360" dur="3s" repeatCount="indefinite"/>
+      </div>
+      <div style="position:absolute;width:100px;height:100px;border-radius:50%;background:conic-gradient(from 0deg,#f59e0b,#ef4444,#ec4899,#8b5cf6,#06b6d4,#f59e0b);filter:blur(8px);opacity:0.6;animation:spin 3s linear infinite;"></div>
+      <div style="position:relative;width:70px;height:70px;border-radius:50%;background:rgba(0,0,0,0.7);display:flex;align-items:center;justify-content:center;">
+        <div style="width:20px;height:20px;border-radius:50%;background:white;opacity:0.9;"></div>
+      </div>
+      <style>@keyframes spin{from{transform:rotate(0deg)}to{transform:rotate(360deg)}}</style>
+    </div>
+    <div class="card-body">
+      <h3>C — Liquid Chrome / Lava Lamp</h3>
+      <p>Shifting color gradients that flow like liquid metal or lava. Colors map to state: orange warmth when listening, electric when speaking, dark/cooled when idle.</p>
+    </div>
+  </div>
+
+</div>
+
+<p class="subtitle" style="margin-top:1.5rem;text-align:center;">Click one — or just tell me in the terminal. We can mix ideas too.</p>

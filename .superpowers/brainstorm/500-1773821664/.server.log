@@ -1,0 +1,6 @@
+{"type":"server-started","port":50820,"host":"127.0.0.1","url_host":"localhost","url":"http://localhost:50820","screen_dir":"/Users/abhayp/Downloads/Projects/Volini/.superpowers/brainstorm/500-1773821664"}
+{"type":"screen-added","file":"/Users/abhayp/Downloads/Projects/Volini/.superpowers/brainstorm/500-1773821664/blob-style.html"}
+{"source":"user-event","type":"click","text":"A — Organic Morphing Blob\n      Smooth, rounded blob that breathes and morphs shape. Calm purple → electric blue when speaking, muted gray when idle. Like Siri/Gemini but more raw.","choice":"organic","id":null,"timestamp":1773821859406}
+{"type":"screen-added","file":"/Users/abhayp/Downloads/Projects/Volini/.superpowers/brainstorm/500-1773821664/waiting-1.html"}
+{"type":"screen-added","file":"/Users/abhayp/Downloads/Projects/Volini/.superpowers/brainstorm/500-1773821664/blob-mockup.html"}
+{"type":"server-stopped","reason":"idle timeout"}

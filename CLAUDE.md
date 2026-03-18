@@ -72,17 +72,27 @@ Then open http://localhost:3000 and click "Wake up Volini".
 
 ## Architecture
 
+### Voice pipeline (current stack)
+
+| Component | Implementation |
+|-----------|---------------|
+| VAD | Silero (local) |
+| STT | Faster Whisper `small.en` — local CPU, int8 quantized (`agent/volini/stt.py`) |
+| LLM | OpenAI `gpt-4.1-mini` |
+| TTS | Kokoro ONNX `am_michael` — local (`agent/volini/tts.py`) |
+
 ### Request flow
 
 1. User clicks "Wake up Volini" → `app/page.tsx` calls `GET /api/token`
 2. `app/api/token/route.ts` mints a LiveKit JWT for the hard-coded room `volini-room` and returns it with `LIVEKIT_URL`
 3. `app/page.tsx` creates a `<LiveKitRoom>` and renders `components/AssistantInterface.tsx`
-4. `AssistantInterface` uses `useVoiceAssistant()` from `@livekit/components-react` for state, audio track, and mic toggle
-5. The Python agent (`agent/agent.py`) independently connects to the same `volini-room` and handles the full voice pipeline
+4. `AssistantInterface` uses `useVoiceAssistant()` for state/audio and `useDataChannel("metrics", ...)` to receive per-turn latency metrics from the agent
+5. Latency metrics (STT ms, EOT ms, LLM ms, TTS ms, overall ms) are published by the agent over LiveKit data channel topic `"metrics"` and displayed in `components/MetricsPanel.tsx`
+6. The Python agent (`agent/agent.py`) independently connects to the same `volini-room` and handles the full voice pipeline
 
 ### Python agent internals (`agent/`)
 
-- **`agent.py`** — entry point; wires `AgentSession` with OpenAI STT/LLM/TTS + Silero VAD; defines `Assistant(Agent)` with two `@function_tool`s: `lookup_car_details` and `car_topic_guard`
+- **`agent.py`** — entry point; wires `AgentSession` with Faster Whisper STT, OpenAI LLM, Kokoro TTS, Silero VAD; publishes per-turn latency metrics over LiveKit data channel; defines `Assistant(Agent)` with `lookup_car_details` function tool
 - **`volini/retriever.py`** — `CarResearchService.answer_question()`: domain-guards the query, resolves a vehicle, hits NHTSA API for models, scrapes DuckDuckGo for MSRP signals, and formats results for speech
 - **`volini/entity_resolver.py`** — fuzzy alias lookup (e.g. "miata" → Mazda MX-5 Miata). Extend `_ALIASES` to support more vehicles
 - **`volini/domain_guard.py`** — keyword + entity check to classify whether a question is car-related

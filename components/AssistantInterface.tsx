@@ -1,10 +1,11 @@
 "use client";
 
-import { useVoiceAssistant, TrackToggle } from "@livekit/components-react";
+import { useVoiceAssistant, TrackToggle, useDataChannel } from "@livekit/components-react";
 import { Track } from "livekit-client";
 import { Mic, MicOff, Settings, Power } from "lucide-react";
 import { useState, useRef, useEffect } from "react";
 import { clsx } from "clsx";
+import MetricsPanel, { TurnMetrics } from "./MetricsPanel";
 
 interface AssistantInterfaceProps {
     onDisconnect: () => void;
@@ -15,6 +16,17 @@ type VoiceState = "connecting" | "listening" | "speaking" | "thinking" | "initia
 export default function AssistantInterface({ onDisconnect }: AssistantInterfaceProps) {
     const { state, audioTrack } = useVoiceAssistant();
     const [showSettings, setShowSettings] = useState(false);
+    const [turns, setTurns] = useState<TurnMetrics[]>([]);
+
+    useDataChannel("metrics", (msg) => {
+        try {
+            const data = JSON.parse(new TextDecoder().decode(msg.payload));
+            if (data.type === "voice_metrics") {
+                const { stt, eou, llm, tts, overall } = data;
+                setTurns((prev) => [...prev, { stt, eou, llm, tts, overall }]);
+            }
+        } catch {}
+    });
 
     const blobRef = useRef<HTMLDivElement>(null);
     const ringRef = useRef<HTMLDivElement>(null);
@@ -238,6 +250,11 @@ export default function AssistantInterface({ onDisconnect }: AssistantInterfaceP
                         <span className="text-sm font-medium text-zinc-500">Device Selection (Disabled)</span>
                     </div>
                 </div>
+            </div>
+
+            {/* Metrics Panel */}
+            <div className="w-full px-1">
+                <MetricsPanel turns={turns} />
             </div>
         </div>
     );

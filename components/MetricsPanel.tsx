@@ -14,9 +14,9 @@ interface MetricsPanelProps {
 
 const AGENT_CONFIG = [
     { label: "VAD", value: "Silero (local)" },
-    { label: "Speech-to-Text", value: "faster-whisper / small.en (local)" },
-    { label: "LLM", value: "OpenAI / gpt-4.1-mini" },
-    { label: "Text-to-Speech", value: "kokoro-onnx / am_michael (local)" },
+    { label: "Speech-to-Text", value: "Faster Whisper small.en (local)" },
+    { label: "LLM", value: "OpenAI gpt-4.1-mini" },
+    { label: "Text-to-Speech", value: "Kokoro ONNX am_michael (local)" },
     { label: "Turn Detection", value: "True" },
     { label: "Noise Cancellation", value: "False" },
 ];
