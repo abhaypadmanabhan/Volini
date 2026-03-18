@@ -2,7 +2,7 @@ import { AccessToken, AgentDispatchClient } from "livekit-server-sdk";
 import { NextResponse } from "next/server";
 
 export async function GET(request: Request) {
-    const roomName = "volini-room";
+    const roomName = `volini-${Date.now()}`;
     const participantName = `user-${Math.floor(Math.random() * 10000)}`;
 
     if (
