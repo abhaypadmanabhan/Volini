@@ -98,13 +98,14 @@ async def my_agent(ctx: agents.JobContext):
         vad=silero.VAD.load(min_silence_duration=0.2),
     )
 
+    agent = Assistant()
     await session.start(
         room=ctx.room,
-        agent=Assistant(),
+        agent=agent,
     )
 
     # Pre-warm cache for top-N most-queried cars (runs in background, never blocks greeting)
-    asyncio.create_task(_preload_background(Assistant()._research))
+    asyncio.create_task(_preload_background(agent._research))
 
     pending: dict = {}
 
