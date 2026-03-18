@@ -20,10 +20,10 @@ export default function AssistantInterface({ onDisconnect }: AssistantInterfaceP
     const ringRef = useRef<HTMLDivElement>(null);
     const phaseRef = useRef<number>(0);
     const amplitudeRef = useRef<number>(0);
-    const rafRef = useRef<number>(0);
     const prevStateRef = useRef<VoiceState>("");
     const prevStateTimeRef = useRef<number>(Date.now());
     const [isInterrupted, setIsInterrupted] = useState(false);
+    const isInterruptedRef = useRef<boolean>(false);
 
     useEffect(() => {
         // Interrupted state detection
@@ -32,7 +32,11 @@ export default function AssistantInterface({ onDisconnect }: AssistantInterfaceP
             const elapsed = now - prevStateTimeRef.current;
             if (elapsed < 1500) {
                 setIsInterrupted(true);
-                setTimeout(() => setIsInterrupted(false), 800);
+                isInterruptedRef.current = true;
+                setTimeout(() => {
+                    setIsInterrupted(false);
+                    isInterruptedRef.current = false;
+                }, 800);
             }
         }
         prevStateRef.current = state;
@@ -108,21 +112,20 @@ export default function AssistantInterface({ onDisconnect }: AssistantInterfaceP
             if (blobRef.current) {
                 blobRef.current.style.borderRadius = buildBorderRadius(state, phase, amp);
                 blobRef.current.style.transform = getScale(state, amp);
-                blobRef.current.style.boxShadow = getGlow(state, isInterrupted, amp);
+                blobRef.current.style.boxShadow = getGlow(state, isInterruptedRef.current, amp);
             }
 
             animFrameId = requestAnimationFrame(animate);
         };
 
         animFrameId = requestAnimationFrame(animate);
-        rafRef.current = animFrameId;
 
         return () => {
             cancelAnimationFrame(animFrameId);
             if (mediaSource) mediaSource.disconnect();
             if (audioCtx) audioCtx.close();
         };
-    }, [state, audioTrack, isInterrupted]);
+    }, [state, audioTrack]);
 
     const getBlobColor = (s: VoiceState, interrupted: boolean): string => {
         if (interrupted) return "#f97316"; // orange
