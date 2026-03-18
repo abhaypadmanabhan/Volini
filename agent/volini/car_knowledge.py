@@ -9,6 +9,7 @@ import json
 import os
 import re
 import sqlite3
+import threading
 from datetime import datetime, timezone, timedelta
 from pathlib import Path
 from typing import Any
@@ -60,7 +61,8 @@ class CarKnowledgeService:
             if resolved != ":memory:":
                 Path(resolved).parent.mkdir(parents=True, exist_ok=True)
 
-        self._conn = sqlite3.connect(resolved)
+        self._lock = threading.Lock()
+        self._conn = sqlite3.connect(resolved, check_same_thread=False)
         self._conn.row_factory = sqlite3.Row
         self._conn.executescript(_SCHEMA)
         self._conn.commit()
@@ -71,10 +73,11 @@ class CarKnowledgeService:
 
     def is_fresh(self, make: str, model: str) -> bool:
         """Returns True if last_updated is within the 24-hour TTL."""
-        row = self._conn.execute(
-            "SELECT last_updated FROM car_profiles WHERE make = ? AND model = ?",
-            (make, model),
-        ).fetchone()
+        with self._lock:
+            row = self._conn.execute(
+                "SELECT last_updated FROM car_profiles WHERE make = ? AND model = ?",
+                (make, model),
+            ).fetchone()
         if row is None:
             return False
         try:
@@ -87,11 +90,12 @@ class CarKnowledgeService:
 
     def get_cached_profile(self, make: str, model: str) -> dict | None:
         """Returns a dict with parsed profile fields, or None if not cached."""
-        row = self._conn.execute(
-            "SELECT nhtsa_data, fuel_economy, specs, msrp_signal "
-            "FROM car_profiles WHERE make = ? AND model = ?",
-            (make, model),
-        ).fetchone()
+        with self._lock:
+            row = self._conn.execute(
+                "SELECT nhtsa_data, fuel_economy, specs, msrp_signal "
+                "FROM car_profiles WHERE make = ? AND model = ?",
+                (make, model),
+            ).fetchone()
         if row is None:
             return None
 
@@ -122,44 +126,47 @@ class CarKnowledgeService:
     ) -> None:
         """INSERT OR REPLACE a car profile, storing each field as JSON."""
         now = datetime.now(timezone.utc).isoformat()
-        self._conn.execute(
-            """
-            INSERT OR REPLACE INTO car_profiles
-                (make, model, last_updated, nhtsa_data, fuel_economy, specs, msrp_signal)
-            VALUES (?, ?, ?, ?, ?, ?, ?)
-            """,
-            (
-                make,
-                model,
-                now,
-                json.dumps(nhtsa_data),
-                json.dumps(fuel_economy),
-                json.dumps(specs),
-                json.dumps(msrp_signal),
-            ),
-        )
-        self._conn.commit()
+        with self._lock:
+            self._conn.execute(
+                """
+                INSERT OR REPLACE INTO car_profiles
+                    (make, model, last_updated, nhtsa_data, fuel_economy, specs, msrp_signal)
+                VALUES (?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    make,
+                    model,
+                    now,
+                    json.dumps(nhtsa_data),
+                    json.dumps(fuel_economy),
+                    json.dumps(specs),
+                    json.dumps(msrp_signal),
+                ),
+            )
+            self._conn.commit()
 
     def increment_frequency(self, make: str, model: str) -> None:
         """Upsert query_frequency, incrementing query_count on conflict."""
         now = datetime.now(timezone.utc).isoformat()
-        self._conn.execute(
-            """
-            INSERT INTO query_frequency (make, model, query_count, last_queried)
-            VALUES (?, ?, 1, ?)
-            ON CONFLICT(make, model)
-            DO UPDATE SET query_count = query_count + 1, last_queried = excluded.last_queried
-            """,
-            (make, model, now),
-        )
-        self._conn.commit()
+        with self._lock:
+            self._conn.execute(
+                """
+                INSERT INTO query_frequency (make, model, query_count, last_queried)
+                VALUES (?, ?, 1, ?)
+                ON CONFLICT(make, model)
+                DO UPDATE SET query_count = query_count + 1, last_queried = excluded.last_queried
+                """,
+                (make, model, now),
+            )
+            self._conn.commit()
 
     def get_top_cars(self, n: int = 10) -> list[tuple[str, str]]:
         """Returns (make, model) tuples ordered by query_count DESC."""
-        rows = self._conn.execute(
-            "SELECT make, model FROM query_frequency ORDER BY query_count DESC LIMIT ?",
-            (n,),
-        ).fetchall()
+        with self._lock:
+            rows = self._conn.execute(
+                "SELECT make, model FROM query_frequency ORDER BY query_count DESC LIMIT ?",
+                (n,),
+            ).fetchall()
         return [(row["make"], row["model"]) for row in rows]
 
     def close(self) -> None:
@@ -173,7 +180,7 @@ class CarKnowledgeService:
 
 _TIMEOUT = aiohttp.ClientTimeout(total=10)
 _HEADERS = {"User-Agent": "Volini/1.0"}
-_PRICE_RE = re.compile(r'\$\s?\d{2,3}(?:,\d{3})+')
+_PRICE_RE = re.compile(r'\$\s?\d{1,3}(?:,\d{3})+')
 
 
 async def fetch_fuel_economy(make: str, model: str, year: int) -> dict | None:
@@ -224,7 +231,7 @@ async def fetch_carquery_specs(make: str, model: str) -> dict | None:
                     return None
                 text = await resp.text()
                 # Strip JSONP wrapper: ?(...);\n
-                stripped = re.sub(r'^\?\(|\);\s*$', '', text.strip())
+                stripped = re.sub(r'^\w*\(|\);\s*$', '', text.strip())
                 data = json.loads(stripped)
                 trims = data.get("Trims")
                 if not trims:
@@ -275,7 +282,7 @@ async def fetch_msrp_brave(make: str, model: str, year: int) -> str | None:
                 data = await resp.json(content_type=None)
                 results = data.get("web", {}).get("results", [])
                 for result in results:
-                    snippet = result.get("description", "") or result.get("extra_snippets", [""])[0]
+                    snippet = result.get("description", "") or (result.get("extra_snippets") or [""])[0]
                     matches = _PRICE_RE.findall(snippet)
                     if matches:
                         return matches[0]
