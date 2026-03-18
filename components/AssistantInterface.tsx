@@ -187,6 +187,7 @@ export default function AssistantInterface({ onDisconnect }: AssistantInterfaceP
                         borderRadius: "50%",
                         transition: "background-color 600ms ease",
                         willChange: "border-radius, transform, box-shadow",
+                        animation: isInterrupted ? "blob-jolt 0.3s ease-in-out" : "none",
                     }}
                 />
             </div>
