@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 import io
 import logging
+import os
 from typing import Optional
 
 from livekit import rtc
@@ -19,7 +20,8 @@ from livekit.agents.utils import AudioBuffer
 
 logger = logging.getLogger(__name__)
 
-DEFAULT_MODEL = "small.en"
+DEFAULT_MODEL = os.getenv("STT_MODEL", "small.en")
+# Set STT_MODEL=Systran/faster-distil-whisper-small.en in .env for ~2x faster transcription
 
 
 class WhisperSTT(stt.STT):

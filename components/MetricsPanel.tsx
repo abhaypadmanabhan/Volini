@@ -10,6 +10,7 @@ export interface TurnMetrics {
 
 interface MetricsPanelProps {
     turns: TurnMetrics[];
+    agentConfig?: Record<string, string> | null;
 }
 
 const AGENT_CONFIG = [
@@ -41,7 +42,7 @@ function phaseDot(ms: number): string {
 
 const MAX_OVERALL_MS = 1500;
 
-export default function MetricsPanel({ turns }: MetricsPanelProps) {
+export default function MetricsPanel({ turns, agentConfig }: MetricsPanelProps) {
     const displayed = [...turns].reverse(); // most recent first
     const avg =
         turns.length > 0
@@ -49,6 +50,17 @@ export default function MetricsPanel({ turns }: MetricsPanelProps) {
             : null;
     const best =
         turns.length > 0 ? Math.min(...turns.map((t) => t.overall)) : null;
+
+    const config = agentConfig
+        ? [
+            { label: "VAD", value: agentConfig.vad },
+            { label: "Speech-to-Text", value: agentConfig.stt },
+            { label: "LLM", value: agentConfig.llm },
+            { label: "Text-to-Speech", value: agentConfig.tts },
+            { label: "Turn Detection", value: "True" },
+            { label: "Noise Cancellation", value: "False" },
+        ]
+        : AGENT_CONFIG;
 
     return (
         <div className="w-full flex flex-col gap-4">
@@ -58,7 +70,7 @@ export default function MetricsPanel({ turns }: MetricsPanelProps) {
                     Agent Configuration
                 </p>
                 <div className="grid grid-cols-2 gap-x-4 gap-y-2">
-                    {AGENT_CONFIG.map(({ label, value }) => (
+                    {config.map(({ label, value }) => (
                         <div key={label} className="contents">
                             <span className="text-xs font-medium text-zinc-500 uppercase tracking-wide">
                                 {label}

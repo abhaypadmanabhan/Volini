@@ -17,6 +17,7 @@ export default function AssistantInterface({ onDisconnect }: AssistantInterfaceP
     const { state, audioTrack } = useVoiceAssistant();
     const [showSettings, setShowSettings] = useState(false);
     const [turns, setTurns] = useState<TurnMetrics[]>([]);
+    const [agentConfig, setAgentConfig] = useState<Record<string, string> | null>(null);
 
     useDataChannel("metrics", (msg) => {
         try {
@@ -24,6 +25,15 @@ export default function AssistantInterface({ onDisconnect }: AssistantInterfaceP
             if (data.type === "voice_metrics") {
                 const { stt, eou, llm, tts, overall } = data;
                 setTurns((prev) => [...prev, { stt, eou, llm, tts, overall }]);
+            }
+        } catch {}
+    });
+
+    useDataChannel("config", (msg) => {
+        try {
+            const data = JSON.parse(new TextDecoder().decode(msg.payload));
+            if (data.type === "agent_config") {
+                setAgentConfig({ vad: data.vad, stt: data.stt, llm: data.llm, tts: data.tts });
             }
         } catch {}
     });
@@ -254,7 +264,7 @@ export default function AssistantInterface({ onDisconnect }: AssistantInterfaceP
 
             {/* Metrics Panel */}
             <div className="w-full px-1">
-                <MetricsPanel turns={turns} />
+                <MetricsPanel turns={turns} agentConfig={agentConfig} />
             </div>
         </div>
     );

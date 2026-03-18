@@ -11,6 +11,7 @@ from dotenv import load_dotenv
 
 from livekit import agents
 from livekit.agents import AgentServer, AgentSession, Agent, function_tool
+from livekit.agents.tts import StreamAdapter
 from livekit.plugins import openai, silero
 
 from volini.stt import WhisperSTT
@@ -27,15 +28,19 @@ class Assistant(Agent):
     def __init__(self) -> None:
         self._research = CarResearchService()
         super().__init__(
-            instructions="""You are Volini — a passionate car enthusiast voice assistant. You know everything about cars: history, heritage, driving dynamics, brand culture, comparisons, and opinions. You are opinionated, concise, and speak naturally (no markdown, no bullet points).
+            instructions="""You are Volini — a car-obsessed friend, not a search engine. You grew up around cars, you have strong opinions, and you talk like a real person: casually, directly, with enthusiasm. You are NOT a lecturer.
 
-TOOL USAGE POLICY — follow this strictly:
-- Answer WITHOUT calling any tool: comparisons between cars, opinions on which car is better, driving character/dynamics, brand heritage and history, general reliability reputation, design philosophy, racing heritage, famous variants or special editions.
-- ONLY call lookup_car_details for: specific current MSRP or price ranges, official EPA fuel economy numbers (MPG), active recall status, trim level availability for a specific model year, confirmation of current model year availability.
+VOICE RULES (follow strictly):
+- Keep replies to 1–2 short sentences. Absolute maximum: 60 words.
+- No markdown, no bullet points, no lists — ever.
+- Say "around thirty thousand dollars" not "$30,000". Say "miles per gallon" not "MPG".
+- Match the user's energy: if they're excited, be excited. If they're chill, be chill.
+- If the user interrupts, drop what you were saying and respond to the new thing in one sentence.
+- Never mention you're an AI unless directly asked.
 
-If the question can be answered from your training knowledge, answer it directly. Only use the tool when you genuinely need live data.
-
-Keep responses 2-4 sentences. No markdown. No bullet points. Expand abbreviations naturally for speech (say "miles per gallon" not "MPG", say "starting price" not "MSRP")."""
+TOOL POLICY:
+- Answer from knowledge: comparisons, opinions, driving dynamics, heritage, reliability, design, racing history, variants.
+- Call lookup_car_details ONLY for: current MSRP, EPA MPG numbers, active recalls, trim availability, current model year confirmation."""
         )
 
     @function_tool
@@ -91,10 +96,23 @@ async def my_agent(ctx: agents.JobContext):
 
     logger.info("Setting up AgentSession for room %s", ctx.room.name)
 
+    stt_model = os.getenv("STT_MODEL", "small.en")
+
+    if os.getenv("LLM_PROVIDER") == "ollama":
+        llm = openai.LLM(
+            model=os.getenv("OLLAMA_MODEL", "llama3.2:1b"),
+            base_url=os.getenv("OLLAMA_BASE_URL", "http://localhost:11434/v1"),
+            api_key="ollama",
+            temperature=0.4,
+            max_completion_tokens=60,
+        )
+    else:
+        llm = openai.LLM(model="gpt-4.1-mini", temperature=0.3, max_completion_tokens=120)
+
     session = AgentSession(
-        stt=WhisperSTT(model="small.en", language="en"),
-        llm=openai.LLM(model="gpt-4.1-mini", temperature=0.3),
-        tts=KokoroTTS(voice="am_michael", speed=1.0),
+        stt=WhisperSTT(model=stt_model, language="en"),
+        llm=llm,
+        tts=StreamAdapter(tts=KokoroTTS(voice="am_michael", speed=1.0)),
         vad=silero.VAD.load(min_silence_duration=0.2),
     )
 
@@ -103,6 +121,21 @@ async def my_agent(ctx: agents.JobContext):
         room=ctx.room,
         agent=agent,
     )
+
+    # Publish agent config over data channel so the frontend can display it accurately
+    llm_provider = os.getenv("LLM_PROVIDER", "openai")
+    if llm_provider == "ollama":
+        llm_label = f"Ollama {os.getenv('OLLAMA_MODEL', 'llama3.2:1b')} (local)"
+    else:
+        llm_label = "OpenAI gpt-4.1-mini"
+    config_payload = json.dumps({
+        "type": "agent_config",
+        "vad": "Silero (local)",
+        "stt": f"Faster Whisper {stt_model} (local)",
+        "llm": llm_label,
+        "tts": "Kokoro ONNX am_michael (local)",
+    })
+    await ctx.room.local_participant.publish_data(config_payload, topic="config")
 
     # Pre-warm cache for top-N most-queried cars (runs in background, never blocks greeting)
     asyncio.create_task(_preload_background(agent._research))

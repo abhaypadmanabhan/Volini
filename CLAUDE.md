@@ -69,6 +69,10 @@ Then open http://localhost:3000 and click "Wake up Volini".
 **`agent/.env`** (Python):
 - `LIVEKIT_URL`, `LIVEKIT_API_KEY`, `LIVEKIT_API_SECRET`
 - `OPENAI_API_KEY`
+- `LLM_PROVIDER` — `"openai"` (default) or `"ollama"` for local inference
+- `OLLAMA_MODEL` — Ollama model name (default: `qwen3:2b`)
+- `OLLAMA_BASE_URL` — Ollama API base URL (default: `http://localhost:11434/v1`)
+- `STT_MODEL` — faster-whisper model (default: `small.en`; set `distil-whisper/distil-small.en` for faster STT)
 
 ## Architecture
 
@@ -77,9 +81,9 @@ Then open http://localhost:3000 and click "Wake up Volini".
 | Component | Implementation |
 |-----------|---------------|
 | VAD | Silero (local) |
-| STT | Faster Whisper `small.en` — local CPU, int8 quantized (`agent/volini/stt.py`) |
-| LLM | OpenAI `gpt-4.1-mini` |
-| TTS | Kokoro ONNX `am_michael` — local (`agent/volini/tts.py`) |
+| STT | Faster Whisper `small.en` — local CPU, int8 quantized (`agent/volini/stt.py`); override with `STT_MODEL` env var |
+| LLM | OpenAI `gpt-4.1-mini` (default) or Ollama local model — toggled via `LLM_PROVIDER` env var |
+| TTS | Kokoro ONNX `am_michael` wrapped in `StreamAdapter` for sentence-level streaming (`agent/volini/tts.py`) |
 
 ### Request flow
 
