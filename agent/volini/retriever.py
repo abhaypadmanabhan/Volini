@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 from datetime import datetime, timezone
 import json
 import re
@@ -7,6 +8,7 @@ from typing import Any, Callable
 from urllib.parse import quote_plus
 from urllib.request import Request, urlopen
 
+from .car_knowledge import CarKnowledgeService, fetch_full_profile
 from .domain_guard import classify_domain
 from .entity_resolver import VehicleMatch, resolve_vehicle
 from .voice_style import format_for_speech
@@ -23,11 +25,14 @@ class CarResearchService:
         *,
         fetch_json: JsonFetcher | None = None,
         fetch_text: TextFetcher | None = None,
+        knowledge: CarKnowledgeService | None = None,
     ) -> None:
         self._fetch_json = fetch_json or self._default_fetch_json
         self._fetch_text = fetch_text or self._default_fetch_text
+        self._knowledge = knowledge or CarKnowledgeService()
 
-    def answer_question(self, question: str) -> dict[str, Any]:
+    async def answer_question(self, question: str) -> dict[str, Any]:
+        # 1. Domain check (unchanged)
         verdict = classify_domain(question)
         if not verdict.allowed:
             return {
@@ -36,6 +41,7 @@ class CarResearchService:
                 "topic_allowed": False,
             }
 
+        # 2. Entity resolve (unchanged)
         vehicle = resolve_vehicle(question)
         if vehicle is None:
             return {
@@ -44,38 +50,91 @@ class CarResearchService:
                 "topic_allowed": True,
             }
 
+        # 3. Increment query frequency
+        self._knowledge.increment_frequency(vehicle.make, vehicle.model)
+
         current_year = datetime.now(timezone.utc).year
         lookup_year = current_year + 1
-        models = self._fetch_nhtsa_models(vehicle.make)
-        model_hint = self._pick_model_name(vehicle, models) if vehicle.model else (models[0] if models else "")
-        subject = f"{vehicle.make} {model_hint}".strip()
-        price_hint = self._fetch_price_hint(vehicle, lookup_year)
 
-        source_list = [
-            "https://vpic.nhtsa.dot.gov/api/",
-            "https://duckduckgo.com/",
-        ]
+        # 4. Cache-first: if fresh data exists, use it
+        if self._knowledge.is_fresh(vehicle.make, vehicle.model):
+            profile = self._knowledge.get_cached_profile(vehicle.make, vehicle.model)
+            if profile:
+                summary = self._build_summary(vehicle, profile, lookup_year)
+                return {
+                    "summary": format_for_speech(summary),
+                    "sources": ["cached"],
+                    "topic_allowed": True,
+                    "vehicle": {"make": vehicle.make, "model": vehicle.model},
+                }
 
-        summary = (
-            f"For {subject}, the newest likely model year is around {lookup_year}. "
-            f"{price_hint}"
+        # 5. Fetch from all APIs in parallel
+        profile = await fetch_full_profile(vehicle.make, vehicle.model, lookup_year)
+
+        # 6. Store in cache
+        self._knowledge.store_profile(
+            vehicle.make,
+            vehicle.model,
+            nhtsa_data=profile.get("nhtsa_data"),
+            fuel_economy=profile.get("fuel_economy"),
+            specs=profile.get("specs"),
+            msrp_signal=profile.get("msrp_signal"),
         )
+
+        # 7. Build summary and return
+        summary = self._build_summary(vehicle, profile, lookup_year)
         return {
             "summary": format_for_speech(summary),
-            "sources": source_list,
+            "sources": [
+                "https://vpic.nhtsa.dot.gov/api/",
+                "https://api.nhtsa.gov/SafetyRatings/",
+                "https://www.fueleconomy.gov/",
+                "https://duckduckgo.com/",
+            ],
             "topic_allowed": True,
-            "vehicle": {
-                "make": vehicle.make,
-                "model": model_hint,
-            },
+            "vehicle": {"make": vehicle.make, "model": vehicle.model},
         }
 
-    def _pick_model_name(self, vehicle: VehicleMatch, models: list[str]) -> str:
-        for model in models:
-            if vehicle.model.lower().replace("-", "") in model.lower().replace("-", ""):
-                return model
-        return vehicle.model
+    def _build_summary(self, vehicle: VehicleMatch, profile: dict, lookup_year: int) -> str:
+        """Build a natural-language speech-ready summary from available profile data."""
+        parts = []
+        subject = f"{vehicle.make} {vehicle.model}"
 
+        # MSRP signal
+        msrp = profile.get("msrp_signal")
+        if msrp:
+            # msrp_signal may be stored as a string like "$33,300" or dict or raw text
+            if isinstance(msrp, str):
+                price_matches = re.findall(r'\$\s?\d{1,3}(?:,\d{3})+', msrp)
+                if price_matches:
+                    price = price_matches[0].replace("$", "").replace(",", "")
+                    parts.append(f"Starting price is around {price} dollars")
+                else:
+                    parts.append(f"Pricing: {msrp[:100]}")
+            elif isinstance(msrp, dict):
+                parts.append(f"Pricing data available for {lookup_year}")
+
+        # Fuel economy
+        fuel = profile.get("fuel_economy")
+        if fuel and isinstance(fuel, dict):
+            # fueleconomy.gov may return various structures
+            mpg = fuel.get("city") or fuel.get("highway") or fuel.get("combined")
+            if mpg:
+                parts.append(f"Fuel economy around {mpg} miles per gallon")
+
+        # NHTSA safety
+        nhtsa = profile.get("nhtsa_data")
+        if nhtsa and isinstance(nhtsa, list) and len(nhtsa) > 0:
+            # NHTSA returns a list of results; just note safety data is available
+            parts.append("Safety ratings are available from NHTSA")
+
+        # Fallback if no data found
+        if not parts:
+            parts.append(f"The {lookup_year} {subject} is confirmed in available records")
+
+        return f"For the {subject}: " + ". ".join(parts) + "."
+
+    # Keep sync helper methods unchanged
     def _fetch_nhtsa_models(self, make: str) -> list[str]:
         if make in _nhtsa_cache:
             return _nhtsa_cache[make]
@@ -84,16 +143,6 @@ class CarResearchService:
         models = [item.get("Model_Name", "") for item in payload.get("Results", []) if item.get("Model_Name")]
         _nhtsa_cache[make] = models
         return models
-
-    def _fetch_price_hint(self, vehicle: VehicleMatch, year: int) -> str:
-        query = quote_plus(f"{year} {vehicle.make} {vehicle.model} MSRP")
-        url = f"https://duckduckgo.com/html/?q={query}"
-        page = self._fetch_text(url)
-        prices = re.findall(r"\$\s?\d{2,3}(?:,\d{3})+", page)
-        if prices:
-            best = prices[0].replace("$", "").strip()
-            return f"I found recent web pricing signals near {best} dollars MSRP, but verify with local dealers."
-        return "I could not verify a reliable current MSRP yet, but I can compare trims and specs right now."
 
     def _default_fetch_json(self, url: str) -> dict[str, Any]:
         request = Request(url, headers={"User-Agent": "Volini/1.0"})

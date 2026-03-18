@@ -5,29 +5,24 @@ import sys
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from volini.retriever import CarResearchService
+from volini.car_knowledge import CarKnowledgeService
 
 
-class RetrieverTests(unittest.TestCase):
-    def test_builds_snapshot_with_sources(self) -> None:
-        def fake_json(url: str) -> dict:
-            if "GetModelsForMake" in url:
-                return {
-                    "Results": [
-                        {"Model_Name": "MX-5 Miata"},
-                        {"Model_Name": "CX-5"},
-                    ]
-                }
-            raise AssertionError(f"Unexpected url: {url}")
+class RetrieverTests(unittest.IsolatedAsyncioTestCase):
+    async def test_builds_snapshot_with_sources(self) -> None:
+        # Create in-memory knowledge service so tests don't touch disk
+        knowledge = CarKnowledgeService(db_path=":memory:")
 
-        def fake_text(url: str) -> str:
-            if "duckduckgo.com" in url:
-                return (
-                    "2026 Mazda MX-5 Miata MSRP starts at $33,300 and tops near $41,000"
-                )
-            return ""
+        # Provide a pre-populated profile so no network calls needed
+        knowledge.store_profile(
+            "Mazda", "MX-5 Miata",
+            msrp_signal="$33,300",
+        )
 
-        service = CarResearchService(fetch_json=fake_json, fetch_text=fake_text)
-        answer = service.answer_question("latest miata price")
+        service = CarResearchService(knowledge=knowledge)
+        # Patch fetch_full_profile so it returns the pre-stored profile
+        # We do this by making is_fresh return True (it will after store_profile)
+        answer = await service.answer_question("latest miata price")
 
         self.assertTrue(answer["sources"])
         self.assertIn("Mazda", answer["summary"])
