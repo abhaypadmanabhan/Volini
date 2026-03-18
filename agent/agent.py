@@ -41,8 +41,47 @@ Keep responses 2-4 sentences. No markdown. No bullet points. Expand abbreviation
     @function_tool
     async def lookup_car_details(self, question: str) -> str:
         """Fetch live data for: current MSRP/price, EPA MPG numbers, recall status, trim availability, or current model year confirmation. Do NOT call this for opinions, comparisons, history, or driving dynamics — answer those directly."""
-        result = self._research.answer_question(question)
+        result = await self._research.answer_question(question)
         return json.dumps(result)
+
+async def _preload_background(research: CarResearchService) -> None:
+    """Pre-warm the knowledge cache for the most frequently queried cars."""
+    try:
+        from datetime import datetime, timezone
+        top_cars = research._knowledge.get_top_cars(n=10)
+        if not top_cars:
+            return  # First run: empty DB, nothing to preload
+
+        current_year = datetime.now(timezone.utc).year
+        lookup_year = current_year + 1
+
+        from volini.car_knowledge import fetch_full_profile
+
+        # Filter to stale entries only
+        stale = [
+            (make, model) for make, model in top_cars
+            if not research._knowledge.is_fresh(make, model)
+        ]
+
+        if stale:
+            logger.info("Preloading cache for %d stale cars: %s", len(stale), stale)
+            tasks = [fetch_full_profile(make, model, lookup_year) for make, model in stale]
+            results = await asyncio.gather(*tasks, return_exceptions=True)
+
+            for (make, model), result in zip(stale, results):
+                if isinstance(result, Exception):
+                    logger.warning("Preload failed for %s %s: %s", make, model, result)
+                    continue
+                research._knowledge.store_profile(
+                    make, model,
+                    nhtsa_data=result.get("nhtsa_data"),
+                    fuel_economy=result.get("fuel_economy"),
+                    specs=result.get("specs"),
+                    msrp_signal=result.get("msrp_signal"),
+                )
+    except Exception as e:
+        logger.warning("Background preload failed: %s", e)
+
 
 server = AgentServer()
 
@@ -63,6 +102,9 @@ async def my_agent(ctx: agents.JobContext):
         room=ctx.room,
         agent=Assistant(),
     )
+
+    # Pre-warm cache for top-N most-queried cars (runs in background, never blocks greeting)
+    asyncio.create_task(_preload_background(Assistant()._research))
 
     pending: dict = {}
 
