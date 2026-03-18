@@ -64,6 +64,9 @@ _ALIASES: dict[str, tuple[str, str]] = {
     "crv": ("Honda", "CR-V"),
     "pilot": ("Honda", "Pilot"),
     "prius": ("Toyota", "Prius"),
+    "gr86": ("Toyota", "GR86"),
+    "gr-86": ("Toyota", "GR86"),
+    "86": ("Toyota", "GR86"),
 }
 
 # NHTSA makes list — fetched once at module load, used for brand recognition

@@ -51,6 +51,7 @@ class CarResearchService:
             }
 
         # 3. Increment query frequency
+        # NOTE: SQLite calls below are synchronous but fast (<1ms); acceptable on the async path.
         self._knowledge.increment_frequency(vehicle.make, vehicle.model)
 
         current_year = datetime.now(timezone.utc).year
@@ -59,7 +60,8 @@ class CarResearchService:
         # 4. Cache-first: if fresh data exists, use it
         if self._knowledge.is_fresh(vehicle.make, vehicle.model):
             profile = self._knowledge.get_cached_profile(vehicle.make, vehicle.model)
-            if profile:
+            # Only use cache if at least one data field is populated
+            if profile and any(profile.get(k) is not None for k in ("nhtsa_data", "fuel_economy", "specs", "msrp_signal")):
                 summary = self._build_summary(vehicle, profile, lookup_year)
                 return {
                     "summary": format_for_speech(summary),
@@ -117,8 +119,14 @@ class CarResearchService:
         # Fuel economy
         fuel = profile.get("fuel_economy")
         if fuel and isinstance(fuel, dict):
-            # fueleconomy.gov may return various structures
-            mpg = fuel.get("city") or fuel.get("highway") or fuel.get("combined")
+            # Try common parsed keys first, then any numeric string value
+            mpg = fuel.get("mpg") or fuel.get("city") or fuel.get("combined") or fuel.get("highway")
+            if not mpg:
+                # Try to find any numeric value in the dict
+                for v in fuel.values():
+                    if isinstance(v, (int, float)) and 5 < v < 150:
+                        mpg = str(v)
+                        break
             if mpg:
                 parts.append(f"Fuel economy around {mpg} miles per gallon")
 
