@@ -10,6 +10,7 @@ import numpy as np
 
 from livekit.agents import tts
 from livekit.agents.types import DEFAULT_API_CONNECT_OPTIONS, APIConnectOptions
+from volini.voice_style import format_for_speech
 
 logger = logging.getLogger(__name__)
 
@@ -107,7 +108,7 @@ class QwenChunkedStream(tts.ChunkedStream):
 
     async def _run(self, output_emitter: tts.AudioEmitter) -> None:
         model = await self._qwen_tts._get_model()
-        text = self.input_text
+        text = format_for_speech(self.input_text)
         instruct = self._qwen_tts._voice_description
 
         def _synthesize() -> bytes:
