@@ -15,7 +15,7 @@ logger = logging.getLogger(__name__)
 
 SAMPLE_RATE = 24000
 NUM_CHANNELS = 1
-MODEL_ID = "Qwen/Qwen3-TTS-0.6B"
+MODEL_ID = "Qwen/Qwen3-TTS-12Hz-1.7B-VoiceDesign"
 
 VOLINI_VOICE = (
     "Energetic, enthusiastic male car-enthusiast host. "

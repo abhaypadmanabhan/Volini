@@ -20,7 +20,7 @@ const AGENT_CONFIG = [
     { label: "VAD",  value: "Silero (local)" },
     { label: "STT",  value: "Faster Whisper small.en" },
     { label: "LLM",  value: "OpenAI gpt-4.1-mini" },
-    { label: "TTS",  value: "Qwen3 TTS 0.6B (MPS)" },
+    { label: "TTS",  value: "Qwen3 TTS 1.7B (MPS)" },
 ];
 
 const MAX_OVERALL_MS = 1500;

@@ -13,7 +13,7 @@ from dotenv import load_dotenv
 from livekit import agents
 from livekit.agents import AgentServer, AgentSession, Agent, function_tool
 from livekit.agents.tts import StreamAdapter
-from livekit.agents.tts import BasicSentenceTokenizer
+from livekit.agents import tokenize
 from livekit.plugins import openai, silero
 
 from volini.stt import WhisperSTT
@@ -139,7 +139,7 @@ async def my_agent(ctx: agents.JobContext):
             "vad": "Silero (local)",
             "stt": f"Faster Whisper {stt_model} (local)",
             "llm": llm_label,
-            "tts": "Qwen3 TTS 0.6B (MPS)",
+            "tts": "Qwen3 TTS 1.7B (MPS)",
             "llm_auto": not switchable_llm._manual,
             "llm_provider": switchable_llm._mode,
         })
@@ -155,7 +155,7 @@ async def my_agent(ctx: agents.JobContext):
     session = AgentSession(
         stt=WhisperSTT(model=stt_model, language="en"),
         llm=switchable_llm,
-        tts=StreamAdapter(tts=QwenTTS(), sentence_tokenizer=BasicSentenceTokenizer()),
+        tts=StreamAdapter(tts=QwenTTS(), sentence_tokenizer=tokenize.basic.SentenceTokenizer()),
         vad=silero.VAD.load(min_silence_duration=0.2),
     )
 
