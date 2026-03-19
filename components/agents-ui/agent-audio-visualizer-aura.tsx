@@ -35,7 +35,7 @@ const STATE_COLOR: Record<string, string> = {
 export default function AgentAudioVisualizerAura({
     size = "md",
     color = "#8B5CF6",
-    colorShift: _colorShift = 0,
+    colorShift: _colorShift = 0, // accepted for API compatibility, not used in new design
     state,
     className,
 }: AgentAudioVisualizerAuraProps) {
@@ -214,8 +214,6 @@ export default function AgentAudioVisualizerAura({
     // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [currentState, audioTrack, localParticipant]);
 
-    // Thinking arc rotation angle (slow, driven by framer-motion separately)
-    const thinkingRotate = currentState === "thinking" ? 360 : 0;
 
     return (
         <div
