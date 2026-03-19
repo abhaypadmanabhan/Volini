@@ -205,6 +205,7 @@ async def my_agent(ctx: agents.JobContext):
     asyncio.create_task(_prewarm_tts(piper_tts_instance))
 
     pending: dict = {}
+    _fallback_tasks: list[asyncio.Task] = []
 
     async def _do_publish() -> None:
         """Publish pending metrics and clear. Caller must verify pending is complete."""
@@ -246,7 +247,8 @@ async def my_agent(ctx: agents.JobContext):
             llm_ms = round(m.ttft * 1000)
             pending["llm"] = llm_ms
             switchable_llm.record_llm_latency(llm_ms)
-            asyncio.create_task(_flush_fallback())
+            t = asyncio.create_task(_flush_fallback())
+            _fallback_tasks.append(t)
         elif t == "tts_metrics":
             # Accumulate TTS time from first sentence to last — cumulative wall-clock
             if "tts_start" not in pending:
@@ -267,6 +269,12 @@ async def my_agent(ctx: agents.JobContext):
             "Do not mention specific car models, previous conversations, or cached data."
         )
     )
+
+    try:
+        await session.wait_for_close()
+    finally:
+        for t in _fallback_tasks:
+            t.cancel()
 
 
 if __name__ == "__main__":
