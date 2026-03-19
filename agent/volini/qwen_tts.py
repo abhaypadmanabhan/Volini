@@ -98,7 +98,7 @@ class QwenChunkedStream(tts.ChunkedStream):
                 wavs, sr = model.generate_voice_design(  # type: ignore
                     text=text,
                     instruct=instruct,
-                    language="en",
+                    language="english",
                 )
                 wav = wavs[0]  # np.ndarray float32
 
