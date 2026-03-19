@@ -1,10 +1,13 @@
 import asyncio
+import faulthandler
 import logging
 import os
 import json
 import time
 import certifi
 import httpx
+
+faulthandler.enable()  # dumps C-level stack trace to stderr on SIGSEGV
 
 os.environ["SSL_CERT_FILE"] = certifi.where()
 os.environ["SSL_CERT_DIR"] = certifi.where()
@@ -18,7 +21,7 @@ from livekit.agents import tokenize
 from livekit.plugins import openai, silero
 
 from volini.stt import WhisperSTT
-from volini.qwen_tts import QwenTTS
+from volini.piper_tts import PiperTTS
 from volini.switchable_llm import SwitchableLLM
 from volini.retriever import CarResearchService
 
@@ -108,13 +111,13 @@ async def _preload_background(research: CarResearchService) -> None:
         logger.warning("Background preload failed: %s", e)
 
 
-async def _prewarm_tts(tts_instance: QwenTTS) -> None:
-    """Load the QwenTTS model weights eagerly so the first synthesis has no cold-start delay."""
+async def _prewarm_tts(tts_instance: PiperTTS) -> None:
+    """Load Piper voice model eagerly so the first synthesis has no cold-start delay."""
     try:
-        await tts_instance._get_model()
-        logger.info("QwenTTS: model pre-warm complete")
+        await tts_instance._get_voice()
+        logger.info("PiperTTS: model pre-warm complete")
     except Exception as e:
-        logger.warning("QwenTTS pre-warm failed: %s", e)
+        logger.warning("PiperTTS pre-warm failed: %s", e)
 
 
 server = AgentServer(num_idle_processes=1, job_memory_warn_mb=2000)
@@ -149,7 +152,7 @@ async def my_agent(ctx: agents.JobContext):
             "vad": "Silero (local)",
             "stt": f"Faster Whisper {stt_model} (local)",
             "llm": llm_label,
-            "tts": f"Qwen3 TTS 0.6B {qwen_tts_instance._speaker} (MLX)",
+            "tts": "Piper TTS en_US-ryan-high (ONNX)",
             "llm_auto": not switchable_llm._manual,
             "llm_provider": switchable_llm._mode,
         })
@@ -162,13 +165,11 @@ async def my_agent(ctx: agents.JobContext):
         on_switch=_publish_config,
     )
 
-    qwen_tts_instance = QwenTTS(
-        speaker=os.getenv("QWEN_TTS_SPEAKER", "Ryan"),
-    )
+    piper_tts_instance = PiperTTS()
     session = AgentSession(
         stt=WhisperSTT(model=stt_model, language="en"),
         llm=switchable_llm,
-        tts=StreamAdapter(tts=qwen_tts_instance, sentence_tokenizer=tokenize.basic.SentenceTokenizer()),
+        tts=StreamAdapter(tts=piper_tts_instance, sentence_tokenizer=tokenize.basic.SentenceTokenizer()),
         vad=silero.VAD.load(min_silence_duration=0.2),
     )
 
@@ -190,8 +191,6 @@ async def my_agent(ctx: agents.JobContext):
         payload = bytes(dp.data)
         if topic == "llm_override":
             asyncio.create_task(_handle_llm_override(json.loads(payload)))
-        elif topic == "tts_config":
-            asyncio.create_task(_handle_tts_config(json.loads(payload)))
 
     async def _handle_llm_override(msg: dict) -> None:
         if msg.get("type") != "llm_override":
@@ -201,20 +200,9 @@ async def my_agent(ctx: agents.JobContext):
                     msg["provider"], msg.get("model"), new_label)
         await _publish_config(new_label)
 
-    async def _handle_tts_config(msg: dict) -> None:
-        if msg.get("type") != "tts_config":
-            return
-        qwen_tts_instance.update_config(
-            speaker=msg.get("speaker"),
-            instruct=msg.get("instruct"),
-            temperature=msg.get("temperature"),
-            seed=msg.get("seed"),
-        )
-        logger.info("TTS config updated: %s", msg)
-
     # Pre-warm cache for top-N most-queried cars (runs in background, never blocks greeting)
     asyncio.create_task(_preload_background(agent._research))
-    asyncio.create_task(_prewarm_tts(qwen_tts_instance))
+    asyncio.create_task(_prewarm_tts(piper_tts_instance))
 
     pending: dict = {}
 
