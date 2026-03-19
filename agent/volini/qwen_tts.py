@@ -1,4 +1,4 @@
-"""Qwen3-TTS-0.6B LiveKit TTS plugin (MPS / CPU)."""
+"""Qwen3-TTS-0.6B LiveKit TTS plugin (MLX / Apple Silicon)."""
 
 from __future__ import annotations
 
@@ -16,7 +16,8 @@ logger = logging.getLogger(__name__)
 
 SAMPLE_RATE = 24000
 NUM_CHANNELS = 1
-MODEL_ID = "Qwen/Qwen3-TTS-12Hz-0.6B-CustomVoice"
+# MLX-community bfloat16 weights — no NaN issues, 2× faster than float32 on MPS
+MODEL_ID = "mlx-community/Qwen3-TTS-12Hz-0.6B-CustomVoice-bf16"
 DEFAULT_SPEAKER = "Ryan"       # Dynamic male voice, strong rhythmic drive — English native
 VOLINI_INSTRUCT = (            # Short style hint; keeps context shorter than VoiceDesign
     "Speak with car-enthusiast energy. Fast-paced, direct American English."
@@ -28,7 +29,7 @@ class QwenTTS(tts.TTS):
         self,
         speaker: str = DEFAULT_SPEAKER,
         instruct: str = VOLINI_INSTRUCT,
-        device: Optional[str] = None,
+        device: Optional[str] = None,  # kept for API compat, unused by MLX
         temperature: float = 0.5,
         seed: int = 42,
     ) -> None:
@@ -39,7 +40,6 @@ class QwenTTS(tts.TTS):
         )
         self._speaker = speaker
         self._instruct = instruct
-        self._device = device  # None = auto-detect
         self._temperature = temperature
         self._seed = seed
         self._model: Optional[object] = None
@@ -62,32 +62,13 @@ class QwenTTS(tts.TTS):
             self._seed = seed
 
     def _load_model_sync(self) -> object:
-        import torch
-        from qwen_tts.inference.qwen3_tts_model import Qwen3TTSModel  # type: ignore
-
-        if self._device is not None:
-            device = self._device
-        elif torch.backends.mps.is_available():
-            device = "mps"
-            logger.info("QwenTTS: using MPS (Apple Silicon)")
-        else:
-            device = "cpu"
-            logger.warning("QwenTTS: MPS not available, falling back to CPU (slower)")
+        from mlx_audio.tts.utils import load  # type: ignore
 
         logger.warning(
-            "QwenTTS: first synthesis will trigger a ~400 MB model download from HuggingFace — please wait"
+            "QwenTTS: first synthesis will trigger a model download from HuggingFace — please wait"
         )
-        # float16 causes inf/nan probability tensors on MPS with the 0.6B model
-        # (sharper logit distributions overflow float16's limited exponent range).
-        # float32 is numerically stable; memory cost is acceptable for 0.6B.
-        model = Qwen3TTSModel.from_pretrained(
-            MODEL_ID,
-            dtype=torch.float32,
-        )
-        # Qwen3TTSModel is not an nn.Module — move the inner model and sync wrapper.device
-        model.model = model.model.to(device)
-        model.device = next(model.model.parameters()).device
-        logger.info("QwenTTS: model loaded on %s (speaker=%s)", model.device, self._speaker)
+        model = load(MODEL_ID)
+        logger.info("QwenTTS: MLX model loaded (speaker=%s)", self._speaker)
         return model
 
     async def _get_model(self) -> object:
@@ -119,35 +100,43 @@ class QwenChunkedStream(tts.ChunkedStream):
 
         def _synthesize() -> bytes:
             try:
-                import torch
-                torch.manual_seed(self._qwen_tts._seed)
-                if torch.backends.mps.is_available():
-                    torch.mps.manual_seed(self._qwen_tts._seed)
+                import mlx.core as mx  # type: ignore
 
-                wavs, sr = model.generate_custom_voice(  # type: ignore
+                # Collect all audio segments from the generator
+                audio_parts: list[np.ndarray] = []
+                for result in model.generate(  # type: ignore
                     text=text,
-                    speaker=self._qwen_tts._speaker,
+                    voice=self._qwen_tts._speaker,
                     instruct=self._qwen_tts._instruct,
-                    language="english",
+                    lang_code="english",
                     temperature=self._qwen_tts._temperature,
-                    do_sample=True,
-                )
-                wav = wavs[0]  # np.ndarray float32
+                    top_k=50,
+                    top_p=1.0,
+                    repetition_penalty=1.05,
+                ):
+                    # Ensure MLX computation is complete before converting
+                    mx.eval(result.audio)
+                    audio_np = np.array(result.audio, dtype=np.float32)
+                    if audio_np.ndim > 1:
+                        audio_np = audio_np.flatten()
+                    audio_parts.append(audio_np)
+
+                if not audio_parts:
+                    logger.warning("QwenTTS: no audio generated")
+                    return b""
+
+                wav = np.concatenate(audio_parts)
 
                 # Resample if model returns a different sample rate
-                if sr != SAMPLE_RATE:
-                    from scipy.signal import resample_poly  # type: ignore
+                result_sr = getattr(result, "sample_rate", SAMPLE_RATE)
+                if result_sr != SAMPLE_RATE:
                     import math
-                    gcd = math.gcd(SAMPLE_RATE, sr)
-                    wav = resample_poly(wav, SAMPLE_RATE // gcd, sr // gcd).astype(np.float32)
+                    from scipy.signal import resample_poly  # type: ignore
+                    gcd = math.gcd(SAMPLE_RATE, result_sr)
+                    wav = resample_poly(wav, SAMPLE_RATE // gcd, result_sr // gcd).astype(np.float32)
 
                 pcm = (np.clip(wav, -1.0, 1.0) * 32767).astype(np.int16)
-                result = pcm.tobytes()
-
-                if torch.backends.mps.is_available():
-                    torch.mps.empty_cache()
-
-                return result
+                return pcm.tobytes()
             except Exception as exc:
                 logger.exception("QwenTTS synthesis failed: %s", exc)
                 raise

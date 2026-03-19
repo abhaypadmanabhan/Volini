@@ -2,6 +2,7 @@ import asyncio
 import logging
 import os
 import json
+import time
 import certifi
 import httpx
 
@@ -148,7 +149,7 @@ async def my_agent(ctx: agents.JobContext):
             "vad": "Silero (local)",
             "stt": f"Faster Whisper {stt_model} (local)",
             "llm": llm_label,
-            "tts": f"Qwen3 TTS 0.6B {qwen_tts_instance._speaker} (MPS)",
+            "tts": f"Qwen3 TTS 0.6B {qwen_tts_instance._speaker} (MLX)",
             "llm_auto": not switchable_llm._manual,
             "llm_provider": switchable_llm._mode,
         })
@@ -220,7 +221,11 @@ async def my_agent(ctx: agents.JobContext):
     async def _do_publish() -> None:
         """Publish pending metrics and clear. Caller must verify pending is complete."""
         tts_ms = pending.get("tts", 0)
-        overall = pending["stt"] + pending["eou"] + pending["llm"] + tts_ms
+        # Wall-clock overall: from end-of-utterance to when TTS finishes
+        turn_start = pending.get("turn_start", 0)
+        overall = round((time.time() - turn_start) * 1000) if turn_start else (
+            pending["stt"] + pending["eou"] + pending["llm"] + tts_ms
+        )
         payload = json.dumps({
             "type": "voice_metrics",
             "stt": pending["stt"],
@@ -248,13 +253,17 @@ async def my_agent(ctx: agents.JobContext):
         if t == "eou_metrics":
             pending["stt"] = round(m.transcription_delay * 1000)
             pending["eou"] = round(m.end_of_utterance_delay * 1000)
+            pending["turn_start"] = time.time()
         elif t == "llm_metrics":
             llm_ms = round(m.ttft * 1000)
             pending["llm"] = llm_ms
             switchable_llm.record_llm_latency(llm_ms)
             asyncio.create_task(_flush_fallback())
         elif t == "tts_metrics":
-            pending["tts"] = round(m.ttfb * 1000)
+            # Accumulate TTS time from first sentence to last — cumulative wall-clock
+            if "tts_start" not in pending:
+                pending["tts_start"] = time.time()
+            pending["tts"] = round((time.time() - pending["tts_start"]) * 1000)
             # tts_metrics is the last event in the pipeline — publish now if we have everything
             if all(k in pending for k in ("stt", "eou", "llm")):
                 await _do_publish()

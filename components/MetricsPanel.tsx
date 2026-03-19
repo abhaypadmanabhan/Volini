@@ -186,7 +186,7 @@ export default function MetricsPanel({ turns, agentConfig, llmSelectorSlot, ttsC
                             >
                                 <span>#</span>
                                 <span>STT</span>
-                                <span>EOT</span>
+                                <span>EOU</span>
                                 <span>LLM</span>
                                 <span>TTS</span>
                                 <span>Total</span>
