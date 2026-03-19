@@ -14,6 +14,7 @@ interface MetricsPanelProps {
     turns: TurnMetrics[];
     agentConfig?: Record<string, string> | null;
     llmSelectorSlot?: ReactNode;
+    ttsControlsSlot?: ReactNode;
 }
 
 const AGENT_CONFIG = [
@@ -43,7 +44,7 @@ function barColor(ms: number): string {
     return "#f87171";
 }
 
-export default function MetricsPanel({ turns, agentConfig, llmSelectorSlot }: MetricsPanelProps) {
+export default function MetricsPanel({ turns, agentConfig, llmSelectorSlot, ttsControlsSlot }: MetricsPanelProps) {
     const displayed = [...turns].reverse();
     const avg  = turns.length > 0 ? Math.round(turns.reduce((s, t) => s + t.overall, 0) / turns.length) : null;
     const best = turns.length > 0 ? Math.min(...turns.map((t) => t.overall)) : null;
@@ -167,6 +168,7 @@ export default function MetricsPanel({ turns, agentConfig, llmSelectorSlot }: Me
                     ))}
                 </div>
                 {llmSelectorSlot}
+                {ttsControlsSlot}
             </div>
         </div>
     );

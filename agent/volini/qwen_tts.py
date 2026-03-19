@@ -29,6 +29,8 @@ class QwenTTS(tts.TTS):
         self,
         voice_description: str = VOLINI_VOICE,
         device: Optional[str] = None,
+        temperature: float = 0.5,
+        seed: int = 42,
     ) -> None:
         super().__init__(
             capabilities=tts.TTSCapabilities(streaming=False),
@@ -37,8 +39,23 @@ class QwenTTS(tts.TTS):
         )
         self._voice_description = voice_description
         self._device = device  # None = auto-detect
+        self._temperature = temperature
+        self._seed = seed
         self._model: Optional[object] = None
         self._lock = asyncio.Lock()
+
+    def update_config(
+        self,
+        voice_description: Optional[str] = None,
+        temperature: Optional[float] = None,
+        seed: Optional[int] = None,
+    ) -> None:
+        if voice_description is not None:
+            self._voice_description = voice_description
+        if temperature is not None:
+            self._temperature = temperature
+        if seed is not None:
+            self._seed = seed
 
     def _load_model_sync(self) -> object:
         import torch
@@ -95,10 +112,17 @@ class QwenChunkedStream(tts.ChunkedStream):
 
         def _synthesize() -> bytes:
             try:
+                import torch
+                torch.manual_seed(self._qwen_tts._seed)
+                if torch.backends.mps.is_available():
+                    torch.mps.manual_seed(self._qwen_tts._seed)
+
                 wavs, sr = model.generate_voice_design(  # type: ignore
                     text=text,
                     instruct=instruct,
                     language="english",
+                    temperature=self._qwen_tts._temperature,
+                    do_sample=True,
                 )
                 wav = wavs[0]  # np.ndarray float32
 
@@ -110,7 +134,12 @@ class QwenChunkedStream(tts.ChunkedStream):
                     wav = resample_poly(wav, SAMPLE_RATE // gcd, sr // gcd).astype(np.float32)
 
                 pcm = (np.clip(wav, -1.0, 1.0) * 32767).astype(np.int16)
-                return pcm.tobytes()
+                result = pcm.tobytes()
+
+                if torch.backends.mps.is_available():
+                    torch.mps.empty_cache()
+
+                return result
             except Exception as exc:
                 logger.exception("QwenTTS synthesis failed: %s", exc)
                 raise

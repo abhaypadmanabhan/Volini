@@ -7,6 +7,7 @@ import { useState, useRef, useEffect } from "react";
 import { clsx } from "clsx";
 import MetricsPanel, { TurnMetrics } from "./MetricsPanel";
 import LLMSelector from "./LLMSelector";
+import TTSControls from "./TTSControls";
 import AgentAudioVisualizerAura from "./agents-ui/agent-audio-visualizer-aura";
 import { useRoomContext } from "@livekit/components-react";
 
@@ -66,6 +67,9 @@ export default function AssistantInterface({ onDisconnect }: AssistantInterfaceP
     const room = useRoomContext();
     const sendLLMOverride = (payload: Uint8Array) => {
         room.localParticipant.publishData(payload, { topic: "llm_override" });
+    };
+    const sendTTSConfig = (payload: Uint8Array) => {
+        room.localParticipant.publishData(payload, { topic: "tts_config" });
     };
 
     /* ── Interrupted state detection (preserved exactly) ── */
@@ -171,6 +175,12 @@ export default function AssistantInterface({ onDisconnect }: AssistantInterfaceP
                                 agentConfig={agentConfig}
                                 turns={turns}
                                 onOverride={sendLLMOverride}
+                                disabled={!agentConfig}
+                            />
+                        }
+                        ttsControlsSlot={
+                            <TTSControls
+                                onConfig={sendTTSConfig}
                                 disabled={!agentConfig}
                             />
                         }

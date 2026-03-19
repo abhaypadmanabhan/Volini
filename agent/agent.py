@@ -152,10 +152,11 @@ async def my_agent(ctx: agents.JobContext):
         on_switch=_publish_config,
     )
 
+    qwen_tts_instance = QwenTTS()
     session = AgentSession(
         stt=WhisperSTT(model=stt_model, language="en"),
         llm=switchable_llm,
-        tts=StreamAdapter(tts=QwenTTS(), sentence_tokenizer=tokenize.basic.SentenceTokenizer()),
+        tts=StreamAdapter(tts=qwen_tts_instance, sentence_tokenizer=tokenize.basic.SentenceTokenizer()),
         vad=silero.VAD.load(min_silence_duration=0.2),
     )
 
@@ -169,12 +170,13 @@ async def my_agent(ctx: agents.JobContext):
     # Publish initial agent config
     await _publish_config(switchable_llm.current_label())
 
-    # Wire data channel handler for frontend LLM override
+    # Wire data channel handlers
     @ctx.room.on("data_received")
     def on_data(payload: bytes, participant, topic: str, **_):
-        if topic != "llm_override":
-            return
-        asyncio.create_task(_handle_llm_override(json.loads(payload)))
+        if topic == "llm_override":
+            asyncio.create_task(_handle_llm_override(json.loads(payload)))
+        elif topic == "tts_config":
+            asyncio.create_task(_handle_tts_config(json.loads(payload)))
 
     async def _handle_llm_override(msg: dict) -> None:
         if msg.get("type") != "llm_override":
@@ -184,10 +186,36 @@ async def my_agent(ctx: agents.JobContext):
                     msg["provider"], msg.get("model"), new_label)
         await _publish_config(new_label)
 
+    async def _handle_tts_config(msg: dict) -> None:
+        if msg.get("type") != "tts_config":
+            return
+        qwen_tts_instance.update_config(
+            voice_description=msg.get("voice_description"),
+            temperature=msg.get("temperature"),
+            seed=msg.get("seed"),
+        )
+        logger.info("TTS config updated: %s", msg)
+
     # Pre-warm cache for top-N most-queried cars (runs in background, never blocks greeting)
     asyncio.create_task(_preload_background(agent._research))
 
     pending: dict = {}
+
+    async def _flush_pending_if_ready() -> None:
+        await asyncio.sleep(0.1)  # 100 ms grace period for tts_metrics
+        if all(k in pending for k in ("stt", "eou", "llm")):
+            tts_ms = pending.get("tts", 0)
+            overall = pending["stt"] + pending["eou"] + pending["llm"] + tts_ms
+            payload = json.dumps({
+                "type": "voice_metrics",
+                "stt": pending["stt"],
+                "eou": pending["eou"],
+                "llm": pending["llm"],
+                "tts": tts_ms,
+                "overall": overall,
+            })
+            await ctx.room.local_participant.publish_data(payload, topic="metrics")
+            pending.clear()
 
     async def _publish_metrics(ev) -> None:
         m = ev.metrics
@@ -198,20 +226,10 @@ async def my_agent(ctx: agents.JobContext):
         elif t == "llm_metrics":
             llm_ms = round(m.ttft * 1000)
             pending["llm"] = llm_ms
-            # Feed latency into auto-switch logic
             switchable_llm.record_llm_latency(llm_ms)
+            asyncio.create_task(_flush_pending_if_ready())
         elif t == "tts_metrics":
             pending["tts"] = round(m.ttfb * 1000)
-
-        if all(k in pending for k in ("stt", "eou", "llm", "tts")):
-            overall = pending["stt"] + pending["eou"] + pending["llm"] + pending["tts"]
-            payload = json.dumps({
-                "type": "voice_metrics",
-                **pending,
-                "overall": overall,
-            })
-            await ctx.room.local_participant.publish_data(payload, topic="metrics")
-            pending.clear()
 
     def on_metrics(ev) -> None:
         asyncio.create_task(_publish_metrics(ev))
