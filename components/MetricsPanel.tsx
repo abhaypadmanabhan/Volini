@@ -1,6 +1,11 @@
 "use client";
 
 import { ReactNode, useState } from "react";
+import {
+    AreaChart, Area, BarChart, Bar,
+    XAxis, YAxis, CartesianGrid, Tooltip,
+    ReferenceLine, ResponsiveContainer,
+} from "recharts";
 
 export interface TurnMetrics {
     stt: number;
@@ -121,61 +126,115 @@ export default function MetricsPanel({ turns, agentConfig, llmSelectorSlot, ttsC
                         Waiting for first turn…
                     </p>
                 ) : (
-                    <div className="flex flex-col gap-1">
-                        <div
-                            className="grid gap-x-2 text-[9px] font-mono uppercase tracking-wider px-2 pb-1"
-                            style={{ gridTemplateColumns: "1.5rem 1fr 1fr 1fr 1fr 1fr", color: "#3f3f46" }}
-                        >
-                            <span>#</span>
-                            <span>STT</span>
-                            <span>EOT</span>
-                            <span>LLM</span>
-                            <span>TTS</span>
-                            <span>Total</span>
+                    <div className="flex flex-col gap-4">
+                        {/* Overall latency trend — AreaChart */}
+                        <div>
+                            <p className="text-[9px] font-mono uppercase tracking-[0.16em] mb-2" style={{ color: "#3f3f46" }}>
+                                Overall latency (last 10 turns)
+                            </p>
+                            <ResponsiveContainer width="100%" height={90}>
+                                <AreaChart data={turns.slice(-10).map((t, i) => ({ turn: i + 1, ms: t.overall }))} margin={{ top: 4, right: 4, bottom: 0, left: -20 }}>
+                                    <defs>
+                                        <linearGradient id="overallGrad" x1="0" y1="0" x2="0" y2="1">
+                                            <stop offset="5%" stopColor="#1FD5F9" stopOpacity={0.3} />
+                                            <stop offset="95%" stopColor="#1FD5F9" stopOpacity={0} />
+                                        </linearGradient>
+                                    </defs>
+                                    <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" />
+                                    <XAxis dataKey="turn" tick={{ fontSize: 9, fontFamily: "monospace", fill: "#52525b" }} tickLine={false} axisLine={false} />
+                                    <YAxis tick={{ fontSize: 9, fontFamily: "monospace", fill: "#52525b" }} tickLine={false} axisLine={false} />
+                                    <Tooltip
+                                        contentStyle={{ background: "#18181b", border: "1px solid #27272a", borderRadius: 8, fontSize: 10, fontFamily: "monospace" }}
+                                        labelStyle={{ color: "#71717a" }}
+                                        itemStyle={{ color: "#1FD5F9" }}
+                                        formatter={(v) => [`${v}ms`, "total"]}
+                                    />
+                                    <ReferenceLine y={700}  stroke="#34d399" strokeDasharray="4 3" strokeOpacity={0.6} />
+                                    <ReferenceLine y={1200} stroke="#f59e0b" strokeDasharray="4 3" strokeOpacity={0.6} />
+                                    <Area type="monotone" dataKey="ms" stroke="#1FD5F9" strokeWidth={1.5} fill="url(#overallGrad)" dot={false} />
+                                </AreaChart>
+                            </ResponsiveContainer>
                         </div>
 
-                        {displayed.map((turn, i) => {
-                            const turnNumber = turns.length - i;
-                            const barWidth = Math.min((turn.overall / MAX_OVERALL_MS) * 100, 100);
-                            return (
-                                <div
-                                    key={turnNumber}
-                                    className="relative rounded-lg px-2 py-1.5 overflow-hidden"
-                                    style={{ background: i === 0 ? "rgba(255,255,255,0.04)" : "transparent" }}
-                                >
-                                    <div
-                                        className="absolute inset-y-0 left-0 rounded-lg"
-                                        style={{
-                                            width: `${barWidth}%`,
-                                            backgroundColor: barColor(turn.overall),
-                                            opacity: 0.06,
-                                        }}
+                        {/* Per-component stacked bar */}
+                        <div>
+                            <p className="text-[9px] font-mono uppercase tracking-[0.16em] mb-2" style={{ color: "#3f3f46" }}>
+                                Component breakdown (last 10 turns)
+                            </p>
+                            <ResponsiveContainer width="100%" height={90}>
+                                <BarChart data={turns.slice(-10).map((t, i) => ({ turn: i + 1, stt: t.stt, llm: t.llm, tts: t.tts }))} margin={{ top: 4, right: 4, bottom: 0, left: -20 }}>
+                                    <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" />
+                                    <XAxis dataKey="turn" tick={{ fontSize: 9, fontFamily: "monospace", fill: "#52525b" }} tickLine={false} axisLine={false} />
+                                    <YAxis tick={{ fontSize: 9, fontFamily: "monospace", fill: "#52525b" }} tickLine={false} axisLine={false} />
+                                    <Tooltip
+                                        contentStyle={{ background: "#18181b", border: "1px solid #27272a", borderRadius: 8, fontSize: 10, fontFamily: "monospace" }}
+                                        labelStyle={{ color: "#71717a" }}
+                                        formatter={(v, name) => [`${v}ms`, String(name).toUpperCase()]}
                                     />
-                                    <div
-                                        className="relative grid gap-x-2 items-center"
-                                        style={{ gridTemplateColumns: "1.5rem 1fr 1fr 1fr 1fr 1fr" }}
-                                    >
-                                        <span className="text-[10px] font-mono" style={{ color: "#3f3f46" }}>
-                                            {turnNumber}
-                                        </span>
-                                        {([turn.stt, turn.eou, turn.llm, turn.tts] as number[]).map((ms, j) => (
-                                            <span key={j} className={`text-[10px] font-mono ${phaseColor(ms)}`}>
-                                                {ms}ms
-                                            </span>
-                                        ))}
-                                        <span className={`text-[10px] font-mono font-bold ${overallColor(turn.overall)}`}>
-                                            {turn.overall}ms
-                                        </span>
-                                    </div>
-                                </div>
-                            );
-                        })}
+                                    <Bar dataKey="stt" stackId="a" fill="#34d399" radius={[0, 0, 0, 0]} />
+                                    <Bar dataKey="llm" stackId="a" fill="#1FD5F9" radius={[0, 0, 0, 0]} />
+                                    <Bar dataKey="tts" stackId="a" fill="#a78bfa" radius={[2, 2, 0, 0]} />
+                                </BarChart>
+                            </ResponsiveContainer>
+                        </div>
 
-                        <div
-                            className="mt-1 pt-2 border-t text-[9px] font-mono"
-                            style={{ borderColor: "var(--hud-border)", color: "#52525b" }}
-                        >
-                            {turns.length} turn{turns.length !== 1 ? "s" : ""}
+                        {/* Per-turn detail table */}
+                        <div className="flex flex-col gap-1">
+                            <div
+                                className="grid gap-x-2 text-[9px] font-mono uppercase tracking-wider px-2 pb-1"
+                                style={{ gridTemplateColumns: "1.5rem 1fr 1fr 1fr 1fr 1fr", color: "#3f3f46" }}
+                            >
+                                <span>#</span>
+                                <span>STT</span>
+                                <span>EOT</span>
+                                <span>LLM</span>
+                                <span>TTS</span>
+                                <span>Total</span>
+                            </div>
+
+                            {displayed.map((turn, i) => {
+                                const turnNumber = turns.length - i;
+                                const barWidth = Math.min((turn.overall / MAX_OVERALL_MS) * 100, 100);
+                                return (
+                                    <div
+                                        key={turnNumber}
+                                        className="relative rounded-lg px-2 py-1.5 overflow-hidden"
+                                        style={{ background: i === 0 ? "rgba(255,255,255,0.04)" : "transparent" }}
+                                    >
+                                        <div
+                                            className="absolute inset-y-0 left-0 rounded-lg"
+                                            style={{
+                                                width: `${barWidth}%`,
+                                                backgroundColor: barColor(turn.overall),
+                                                opacity: 0.06,
+                                            }}
+                                        />
+                                        <div
+                                            className="relative grid gap-x-2 items-center"
+                                            style={{ gridTemplateColumns: "1.5rem 1fr 1fr 1fr 1fr 1fr" }}
+                                        >
+                                            <span className="text-[10px] font-mono" style={{ color: "#3f3f46" }}>
+                                                {turnNumber}
+                                            </span>
+                                            {([turn.stt, turn.eou, turn.llm, turn.tts] as number[]).map((ms, j) => (
+                                                <span key={j} className={`text-[10px] font-mono ${phaseColor(ms)}`}>
+                                                    {ms}ms
+                                                </span>
+                                            ))}
+                                            <span className={`text-[10px] font-mono font-bold ${overallColor(turn.overall)}`}>
+                                                {turn.overall}ms
+                                            </span>
+                                        </div>
+                                    </div>
+                                );
+                            })}
+
+                            <div
+                                className="mt-1 pt-2 border-t text-[9px] font-mono"
+                                style={{ borderColor: "var(--hud-border)", color: "#52525b" }}
+                            >
+                                {turns.length} turn{turns.length !== 1 ? "s" : ""}
+                            </div>
                         </div>
                     </div>
                 )

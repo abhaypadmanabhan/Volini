@@ -1,6 +1,7 @@
 "use client";
 
-import { useVoiceAssistant } from "@livekit/components-react";
+import { useVoiceAssistant, useLocalParticipant } from "@livekit/components-react";
+import { Track } from "livekit-client";
 import { useEffect, useRef } from "react";
 import { clsx } from "clsx";
 
@@ -21,6 +22,13 @@ const SIZE_MAP: Record<AuraSize, number> = {
     xl: 360,
 };
 
+const STATE_COLOR: Record<string, string> = {
+    listening:   "#22c55e",  // emerald green
+    thinking:    "#f59e0b",  // amber
+    speaking:    "#1FD5F9",  // cyan
+    interrupted: "#f97316",  // orange
+};
+
 // [scale relative to container, base opacity]
 const RINGS: [number, number][] = [
     [1.00, 0.06],
@@ -38,7 +46,9 @@ export default function AgentAudioVisualizerAura({
     className,
 }: AgentAudioVisualizerAuraProps) {
     const { state: voiceState, audioTrack } = useVoiceAssistant();
+    const { localParticipant } = useLocalParticipant();
     const currentState = state ?? voiceState;
+    const activeColor = STATE_COLOR[currentState] ?? color;
 
     const ringRefs = useRef<(HTMLDivElement | null)[]>([]);
     const innerRef = useRef<HTMLDivElement>(null);
@@ -54,8 +64,15 @@ export default function AgentAudioVisualizerAura({
         let mediaSource: MediaStreamAudioSourceNode | null = null;
         let animId: number;
 
+        const micTrack = localParticipant
+            ?.getTrackPublication(Track.Source.Microphone)
+            ?.track?.mediaStreamTrack;
+
         const setupAudio = () => {
-            const track = audioTrack?.publication?.track?.mediaStreamTrack;
+            // During listening, analyse the user's mic; during speaking, the agent's audio
+            const track = currentState === "listening"
+                ? micTrack
+                : audioTrack?.publication?.track?.mediaStreamTrack;
             if (!track) return;
             try {
                 audioCtx = new AudioContext();
@@ -105,19 +122,18 @@ export default function AgentAudioVisualizerAura({
 
                 let scale = 1;
                 let opacity = RINGS[i][1];
-                let borderColor = color;
+                let borderColor = activeColor;
 
                 if (isSpeaking) {
                     scale = 1 + amp * (0.10 + i * 0.035) + pulse * 0.025;
                     opacity = 0.18 + amp * 0.55 + pulse * 0.08;
                 } else if (isListening) {
                     const active = i >= 2;
-                    scale = active ? 1 + pulse * 0.025 : 1;
-                    opacity = active ? 0.18 + pulse * 0.12 : RINGS[i][1];
+                    scale = active ? 1 + amp * (0.06 + i * 0.02) + pulse * 0.025 : 1;
+                    opacity = active ? 0.18 + amp * 0.45 + pulse * 0.12 : RINGS[i][1];
                 } else if (isThinking) {
                     scale = 1 + pulse * 0.04;
                     opacity = 0.12 + pulse * 0.18;
-                    borderColor = `rgba(251, 191, 36, ${opacity + 0.2})`;
                 } else {
                     // Idle: slow single pulse on outermost ring only
                     scale = i === 0 ? 1 + pulse * 0.015 : 1;
@@ -126,7 +142,7 @@ export default function AgentAudioVisualizerAura({
 
                 ring.style.transform = `scale(${scale.toFixed(4)})`;
                 ring.style.opacity = String(Math.min(opacity, 0.9).toFixed(3));
-                ring.style.borderColor = borderColor === color ? "" : borderColor;
+                ring.style.borderColor = borderColor;
 
                 // Hue shift outer 2 rings for depth
                 if (i < 2 && colorShift > 0) {
@@ -136,11 +152,12 @@ export default function AgentAudioVisualizerAura({
 
             // Inner glow circle
             if (innerRef.current) {
-                const glowR = isSpeaking ? Math.round(18 + amp * 32) : isActive ? 14 : 8;
-                const glowA = isSpeaking ? 0.28 + amp * 0.45 : isListening ? 0.18 : 0.10;
+                const glowR = isSpeaking ? Math.round(18 + amp * 32) : isListening ? Math.round(12 + amp * 20) : isActive ? 14 : 8;
+                const glowA = isSpeaking ? 0.28 + amp * 0.45 : isListening ? 0.18 + amp * 0.30 : isActive ? 0.18 : 0.10;
                 innerRef.current.style.boxShadow =
-                    `0 0 ${glowR}px rgba(31,213,249,${glowA.toFixed(3)}), ` +
-                    `0 0 ${glowR * 2}px rgba(31,213,249,${(glowA * 0.35).toFixed(3)})`;
+                    `0 0 ${glowR}px ${activeColor}${Math.round(glowA * 255).toString(16).padStart(2, "0")}, ` +
+                    `0 0 ${glowR * 2}px ${activeColor}${Math.round(glowA * 0.35 * 255).toString(16).padStart(2, "0")}`;
+                innerRef.current.style.backgroundColor = activeColor;
                 innerRef.current.style.opacity = String(isActive ? 0.85 : 0.45);
             }
 
@@ -159,7 +176,7 @@ export default function AgentAudioVisualizerAura({
             if (mediaSource) mediaSource.disconnect();
             if (audioCtx) audioCtx.close();
         };
-    }, [currentState, audioTrack, colorShift, color]);
+    }, [currentState, audioTrack, localParticipant, colorShift, color, activeColor]);
 
     return (
         <div
@@ -175,7 +192,7 @@ export default function AgentAudioVisualizerAura({
                     style={{
                         width: `${scale * 100}%`,
                         height: `${scale * 100}%`,
-                        border: `1px solid ${color}`,
+                        border: `1px solid ${activeColor}`,
                         opacity: baseOpacity,
                         willChange: "transform, opacity",
                         transition: "border-color 0.4s ease",
@@ -197,10 +214,10 @@ export default function AgentAudioVisualizerAura({
                 style={{
                     width: "27%",
                     height: "27%",
-                    backgroundColor: color,
+                    backgroundColor: activeColor,
                     opacity: 0.10,
-                    willChange: "box-shadow, opacity",
-                    transition: "opacity 0.4s ease",
+                    willChange: "box-shadow, opacity, background-color",
+                    transition: "opacity 0.4s ease, background-color 0.4s ease",
                 }}
             />
         </div>
