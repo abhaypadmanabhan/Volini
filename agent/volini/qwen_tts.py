@@ -16,19 +16,18 @@ logger = logging.getLogger(__name__)
 
 SAMPLE_RATE = 24000
 NUM_CHANNELS = 1
-MODEL_ID = "Qwen/Qwen3-TTS-12Hz-1.7B-VoiceDesign"
-
-VOLINI_VOICE = (
-    "Energetic, enthusiastic male car-enthusiast host. "
-    "Fast-paced delivery with genuine excitement. "
-    "Clear American English accent. Natural conversational tone."
+MODEL_ID = "Qwen/Qwen3-TTS-12Hz-1.7B-CustomVoice"
+DEFAULT_SPEAKER = "Ryan"       # Dynamic male voice, strong rhythmic drive — English native
+VOLINI_INSTRUCT = (            # Short style hint; keeps context shorter than VoiceDesign
+    "Speak with car-enthusiast energy. Fast-paced, direct American English."
 )
 
 
 class QwenTTS(tts.TTS):
     def __init__(
         self,
-        voice_description: str = VOLINI_VOICE,
+        speaker: str = DEFAULT_SPEAKER,
+        instruct: str = VOLINI_INSTRUCT,
         device: Optional[str] = None,
         temperature: float = 0.5,
         seed: int = 42,
@@ -38,7 +37,8 @@ class QwenTTS(tts.TTS):
             sample_rate=SAMPLE_RATE,
             num_channels=NUM_CHANNELS,
         )
-        self._voice_description = voice_description
+        self._speaker = speaker
+        self._instruct = instruct
         self._device = device  # None = auto-detect
         self._temperature = temperature
         self._seed = seed
@@ -47,12 +47,15 @@ class QwenTTS(tts.TTS):
 
     def update_config(
         self,
-        voice_description: Optional[str] = None,
+        speaker: Optional[str] = None,
+        instruct: Optional[str] = None,
         temperature: Optional[float] = None,
         seed: Optional[int] = None,
     ) -> None:
-        if voice_description is not None:
-            self._voice_description = voice_description
+        if speaker is not None:
+            self._speaker = speaker
+        if instruct is not None:
+            self._instruct = instruct
         if temperature is not None:
             self._temperature = temperature
         if seed is not None:
@@ -76,13 +79,12 @@ class QwenTTS(tts.TTS):
         )
         model = Qwen3TTSModel.from_pretrained(
             MODEL_ID,
-            torch_dtype=torch.bfloat16,
-            # flash_attention_2 is NOT supported on MPS — omit attn_implementation
+            dtype=torch.float16,   # was torch_dtype= (deprecated); float16 fully MPS-accelerated
         )
         # Qwen3TTSModel is not an nn.Module — move the inner model and sync wrapper.device
         model.model = model.model.to(device)
         model.device = next(model.model.parameters()).device
-        logger.info("QwenTTS: model loaded on %s", model.device)
+        logger.info("QwenTTS: model loaded on %s (speaker=%s)", model.device, self._speaker)
         return model
 
     async def _get_model(self) -> object:
@@ -111,7 +113,6 @@ class QwenChunkedStream(tts.ChunkedStream):
     async def _run(self, output_emitter: tts.AudioEmitter) -> None:
         model = await self._qwen_tts._get_model()
         text = format_for_speech(self.input_text)
-        instruct = self._qwen_tts._voice_description
 
         def _synthesize() -> bytes:
             try:
@@ -120,9 +121,10 @@ class QwenChunkedStream(tts.ChunkedStream):
                 if torch.backends.mps.is_available():
                     torch.mps.manual_seed(self._qwen_tts._seed)
 
-                wavs, sr = model.generate_voice_design(  # type: ignore
+                wavs, sr = model.generate_custom_voice(  # type: ignore
                     text=text,
-                    instruct=instruct,
+                    speaker=self._qwen_tts._speaker,
+                    instruct=self._qwen_tts._instruct,
                     language="english",
                     temperature=self._qwen_tts._temperature,
                     do_sample=True,

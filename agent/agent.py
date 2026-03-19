@@ -148,7 +148,7 @@ async def my_agent(ctx: agents.JobContext):
             "vad": "Silero (local)",
             "stt": f"Faster Whisper {stt_model} (local)",
             "llm": llm_label,
-            "tts": "Qwen3 TTS 1.7B (MPS)",
+            "tts": f"Qwen3 TTS 1.7B {qwen_tts_instance._speaker} (MPS)",
             "llm_auto": not switchable_llm._manual,
             "llm_provider": switchable_llm._mode,
         })
@@ -161,7 +161,9 @@ async def my_agent(ctx: agents.JobContext):
         on_switch=_publish_config,
     )
 
-    qwen_tts_instance = QwenTTS()
+    qwen_tts_instance = QwenTTS(
+        speaker=os.getenv("QWEN_TTS_SPEAKER", "Ryan"),
+    )
     session = AgentSession(
         stt=WhisperSTT(model=stt_model, language="en"),
         llm=switchable_llm,
@@ -202,7 +204,8 @@ async def my_agent(ctx: agents.JobContext):
         if msg.get("type") != "tts_config":
             return
         qwen_tts_instance.update_config(
-            voice_description=msg.get("voice_description"),
+            speaker=msg.get("speaker"),
+            instruct=msg.get("instruct"),
             temperature=msg.get("temperature"),
             seed=msg.get("seed"),
         )
