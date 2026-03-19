@@ -76,11 +76,13 @@ class QwenTTS(tts.TTS):
         )
         model = Qwen3TTSModel.from_pretrained(
             MODEL_ID,
-            device_map=device,
             torch_dtype=torch.bfloat16,
             # flash_attention_2 is NOT supported on MPS — omit attn_implementation
         )
-        logger.info("QwenTTS: model loaded on %s", device)
+        # Qwen3TTSModel is not an nn.Module — move the inner model and sync wrapper.device
+        model.model = model.model.to(device)
+        model.device = next(model.model.parameters()).device
+        logger.info("QwenTTS: model loaded on %s", model.device)
         return model
 
     async def _get_model(self) -> object:

@@ -107,6 +107,15 @@ async def _preload_background(research: CarResearchService) -> None:
         logger.warning("Background preload failed: %s", e)
 
 
+async def _prewarm_tts(tts_instance: QwenTTS) -> None:
+    """Load the QwenTTS model weights eagerly so the first synthesis has no cold-start delay."""
+    try:
+        await tts_instance._get_model()
+        logger.info("QwenTTS: model pre-warm complete")
+    except Exception as e:
+        logger.warning("QwenTTS pre-warm failed: %s", e)
+
+
 server = AgentServer(num_idle_processes=1, job_memory_warn_mb=2000)
 
 
@@ -201,6 +210,7 @@ async def my_agent(ctx: agents.JobContext):
 
     # Pre-warm cache for top-N most-queried cars (runs in background, never blocks greeting)
     asyncio.create_task(_preload_background(agent._research))
+    asyncio.create_task(_prewarm_tts(qwen_tts_instance))
 
     pending: dict = {}
 
