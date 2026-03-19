@@ -6,7 +6,9 @@ import { Power, BarChart2 } from "lucide-react";
 import { useState, useRef, useEffect } from "react";
 import { clsx } from "clsx";
 import MetricsPanel, { TurnMetrics } from "./MetricsPanel";
+import LLMSelector from "./LLMSelector";
 import AgentAudioVisualizerAura from "./agents-ui/agent-audio-visualizer-aura";
+import { useRoomContext } from "@livekit/components-react";
 
 interface AssistantInterfaceProps {
     onDisconnect: () => void;
@@ -49,10 +51,22 @@ export default function AssistantInterface({ onDisconnect }: AssistantInterfaceP
         try {
             const data = JSON.parse(new TextDecoder().decode(msg.payload));
             if (data.type === "agent_config") {
-                setAgentConfig({ vad: data.vad, stt: data.stt, llm: data.llm, tts: data.tts });
+                setAgentConfig({
+                    vad: data.vad,
+                    stt: data.stt,
+                    llm: data.llm,
+                    tts: data.tts,
+                    llm_auto: String(data.llm_auto ?? true),
+                    llm_provider: data.llm_provider ?? "openai",
+                });
             }
         } catch {}
     });
+
+    const room = useRoomContext();
+    const sendLLMOverride = (payload: Uint8Array) => {
+        room.localParticipant.publishData(payload, { topic: "llm_override" });
+    };
 
     /* ── Interrupted state detection (preserved exactly) ── */
     const prevStateRef = useRef<VoiceState>("");
@@ -149,7 +163,18 @@ export default function AssistantInterface({ onDisconnect }: AssistantInterfaceP
                 }}
             >
                 <div className="max-h-[56vh] overflow-y-auto rounded-2xl">
-                    <MetricsPanel turns={turns} agentConfig={agentConfig} />
+                    <MetricsPanel
+                        turns={turns}
+                        agentConfig={agentConfig}
+                        llmSelectorSlot={
+                            <LLMSelector
+                                agentConfig={agentConfig}
+                                turns={turns}
+                                onOverride={sendLLMOverride}
+                                disabled={!agentConfig}
+                            />
+                        }
+                    />
                 </div>
             </div>
 

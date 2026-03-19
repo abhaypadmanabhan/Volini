@@ -1,5 +1,7 @@
 "use client";
 
+import { ReactNode } from "react";
+
 export interface TurnMetrics {
     stt: number;
     eou: number;
@@ -11,13 +13,14 @@ export interface TurnMetrics {
 interface MetricsPanelProps {
     turns: TurnMetrics[];
     agentConfig?: Record<string, string> | null;
+    llmSelectorSlot?: ReactNode;
 }
 
 const AGENT_CONFIG = [
     { label: "VAD",  value: "Silero (local)" },
     { label: "STT",  value: "Faster Whisper small.en" },
     { label: "LLM",  value: "OpenAI gpt-4.1-mini" },
-    { label: "TTS",  value: "Kokoro ONNX am_michael" },
+    { label: "TTS",  value: "Qwen3 TTS 0.6B (MPS)" },
 ];
 
 const MAX_OVERALL_MS = 1500;
@@ -40,7 +43,7 @@ function barColor(ms: number): string {
     return "#f87171";
 }
 
-export default function MetricsPanel({ turns, agentConfig }: MetricsPanelProps) {
+export default function MetricsPanel({ turns, agentConfig, llmSelectorSlot }: MetricsPanelProps) {
     const displayed = [...turns].reverse();
     const avg  = turns.length > 0 ? Math.round(turns.reduce((s, t) => s + t.overall, 0) / turns.length) : null;
     const best = turns.length > 0 ? Math.min(...turns.map((t) => t.overall)) : null;
@@ -163,6 +166,7 @@ export default function MetricsPanel({ turns, agentConfig }: MetricsPanelProps) 
                         </div>
                     ))}
                 </div>
+                {llmSelectorSlot}
             </div>
         </div>
     );
