@@ -19,7 +19,6 @@ interface MetricsPanelProps {
     turns: TurnMetrics[];
     agentConfig?: Record<string, string> | null;
     llmSelectorSlot?: ReactNode;
-    ttsControlsSlot?: ReactNode;
 }
 
 const AGENT_CONFIG = [
@@ -51,7 +50,7 @@ function barColor(ms: number): string {
 
 type Tab = "latency" | "config";
 
-export default function MetricsPanel({ turns, agentConfig, llmSelectorSlot, ttsControlsSlot }: MetricsPanelProps) {
+export default function MetricsPanel({ turns, agentConfig, llmSelectorSlot }: MetricsPanelProps) {
     const [tab, setTab] = useState<Tab>("latency");
 
     const displayed = [...turns].reverse();
@@ -257,7 +256,6 @@ export default function MetricsPanel({ turns, agentConfig, llmSelectorSlot, ttsC
                         </div>
                     </div>
                     {llmSelectorSlot}
-                    {ttsControlsSlot}
                 </div>
             )}
         </div>

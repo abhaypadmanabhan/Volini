@@ -11,33 +11,12 @@ interface LLMSelectorProps {
 }
 
 export default function LLMSelector({ agentConfig, turns, onOverride, disabled }: LLMSelectorProps) {
-    const [ollamaModels, setOllamaModels] = useState<string[]>([]);
-    const [ollamaError, setOllamaError] = useState<string | null>(null);
-    const [selected, setSelected] = useState<string>("");
-
-    // Fetch Ollama models on mount
-    useEffect(() => {
-        fetch("/api/ollama-models")
-            .then((r) => r.json())
-            .then((data) => {
-                setOllamaModels(data.models ?? []);
-                setOllamaError(data.error ?? null);
-            })
-            .catch(() => setOllamaError("Fetch failed"));
-    }, []);
+    const [selected, setSelected] = useState<"openai" | "ollama">("openai");
 
     // Sync selection with agentConfig
     useEffect(() => {
         if (!agentConfig) return;
-        const provider = agentConfig.llm_provider;
-        if (provider === "openai") {
-            setSelected("openai:gpt-4.1");
-        } else if (provider === "ollama") {
-            const label = agentConfig.llm ?? "";
-            // Extract model name from label like "Ollama qwen3:2b local (auto)"
-            const match = label.match(/^Ollama\s+(\S+)\s+local/);
-            setSelected(match ? `ollama:${match[1]}` : "ollama");
-        }
+        setSelected(agentConfig.llm_provider === "ollama" ? "ollama" : "openai");
     }, [agentConfig]);
 
     // Rolling avg LLM latency (last 5 turns)
@@ -48,21 +27,20 @@ export default function LLMSelector({ agentConfig, turns, onOverride, disabled }
 
     const isAuto = agentConfig?.llm_auto === "true";
 
-    function handleChange(value: string) {
+    function handleSelect(value: "openai" | "ollama") {
         setSelected(value);
-        const [provider, model] = value.split(":");
-        const msg = JSON.stringify({ type: "llm_override", provider, model: model ?? null });
+        const msg = JSON.stringify({
+            type: "llm_override",
+            provider: value,
+            model: null,
+        });
         onOverride(new TextEncoder().encode(msg));
     }
 
-    const allOptions: { value: string; label: string }[] = [
-        { value: "openai:gpt-4.1", label: "OpenAI gpt-4.1  ☁" },
-        ...ollamaModels.map((m) => ({ value: `ollama:${m}`, label: `${m}  ⚡ local` })),
+    const options: { value: "openai" | "ollama"; label: string }[] = [
+        { value: "openai", label: "OpenAI gpt-4.1  ☁" },
+        { value: "ollama", label: "Local (Ollama)  ⚡" },
     ];
-
-    if (ollamaError && ollamaModels.length === 0 && allOptions.length === 1) {
-        // Only OpenAI available
-    }
 
     return (
         <div
@@ -95,29 +73,31 @@ export default function LLMSelector({ agentConfig, turns, onOverride, disabled }
                 </div>
             </div>
 
-            <select
-                value={selected}
-                onChange={(e) => handleChange(e.target.value)}
-                disabled={disabled}
-                className="w-full text-[10px] font-mono rounded-lg px-2 py-1.5 appearance-none cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
-                style={{
-                    background: "rgba(255,255,255,0.05)",
-                    border: "1px solid var(--hud-border)",
-                    color: "#a1a1aa",
-                    outline: "none",
-                }}
-            >
-                {allOptions.map((opt) => (
-                    <option key={opt.value} value={opt.value} style={{ background: "#09090b", color: "#a1a1aa" }}>
+            <div className="flex gap-1">
+                {options.map((opt) => (
+                    <button
+                        key={opt.value}
+                        onClick={() => handleSelect(opt.value)}
+                        disabled={disabled}
+                        className="flex-1 text-[10px] font-mono px-2 py-1.5 rounded-lg transition-all duration-150 disabled:opacity-40 disabled:cursor-not-allowed"
+                        style={
+                            selected === opt.value
+                                ? {
+                                    background: "rgba(139,92,246,0.15)",
+                                    color: "#8B5CF6",
+                                    border: "1px solid rgba(139,92,246,0.35)",
+                                }
+                                : {
+                                    background: "rgba(255,255,255,0.03)",
+                                    color: "#52525b",
+                                    border: "1px solid var(--hud-border)",
+                                }
+                        }
+                    >
                         {opt.label}
-                    </option>
+                    </button>
                 ))}
-                {ollamaError && ollamaModels.length === 0 && (
-                    <option disabled style={{ background: "#09090b", color: "#52525b" }}>
-                        — Ollama offline —
-                    </option>
-                )}
-            </select>
+            </div>
         </div>
     );
 }
