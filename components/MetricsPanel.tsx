@@ -1,6 +1,6 @@
 "use client";
 
-import { ReactNode } from "react";
+import { ReactNode, useState } from "react";
 
 export interface TurnMetrics {
     stt: number;
@@ -44,7 +44,11 @@ function barColor(ms: number): string {
     return "#f87171";
 }
 
+type Tab = "latency" | "config";
+
 export default function MetricsPanel({ turns, agentConfig, llmSelectorSlot, ttsControlsSlot }: MetricsPanelProps) {
+    const [tab, setTab] = useState<Tab>("latency");
+
     const displayed = [...turns].reverse();
     const avg  = turns.length > 0 ? Math.round(turns.reduce((s, t) => s + t.overall, 0) / turns.length) : null;
     const best = turns.length > 0 ? Math.min(...turns.map((t) => t.overall)) : null;
@@ -57,6 +61,8 @@ export default function MetricsPanel({ turns, agentConfig, llmSelectorSlot, ttsC
             { label: "TTS", value: agentConfig.tts },
           ]
         : AGENT_CONFIG;
+
+    const mono = "font-mono";
 
     return (
         <div
@@ -88,88 +94,113 @@ export default function MetricsPanel({ turns, agentConfig, llmSelectorSlot, ttsC
                 )}
             </div>
 
-            {/* Latency table */}
-            {turns.length === 0 ? (
-                <p className="text-[11px] font-mono italic" style={{ color: "#3f3f46" }}>
-                    Waiting for first turn…
-                </p>
-            ) : (
-                <div className="flex flex-col gap-1">
-                    {/* Column headers */}
-                    <div
-                        className="grid gap-x-2 text-[9px] font-mono uppercase tracking-wider px-2 pb-1"
-                        style={{ gridTemplateColumns: "1.5rem 1fr 1fr 1fr 1fr 1fr", color: "#3f3f46" }}
+            {/* Tab bar */}
+            <div className="flex gap-1">
+                {(["latency", "config"] as Tab[]).map((t) => (
+                    <button
+                        key={t}
+                        onClick={() => setTab(t)}
+                        className="text-[10px] font-mono uppercase tracking-wider px-3 py-1 rounded-md transition-all duration-150"
+                        style={{
+                            background: tab === t ? "rgba(31,213,249,0.10)" : "rgba(255,255,255,0.03)",
+                            color: tab === t ? "#1FD5F9" : "#52525b",
+                            borderWidth: "1px",
+                            borderStyle: "solid",
+                            borderColor: tab === t ? "rgba(31,213,249,0.25)" : "var(--hud-border)",
+                        }}
                     >
-                        <span>#</span>
-                        <span>STT</span>
-                        <span>EOT</span>
-                        <span>LLM</span>
-                        <span>TTS</span>
-                        <span>Total</span>
-                    </div>
+                        {t}
+                    </button>
+                ))}
+            </div>
 
-                    {displayed.map((turn, i) => {
-                        const turnNumber = turns.length - i;
-                        const barWidth = Math.min((turn.overall / MAX_OVERALL_MS) * 100, 100);
-                        return (
-                            <div
-                                key={turnNumber}
-                                className="relative rounded-lg px-2 py-1.5 overflow-hidden"
-                                style={{ background: i === 0 ? "rgba(255,255,255,0.04)" : "transparent" }}
-                            >
+            {/* Latency tab */}
+            {tab === "latency" && (
+                turns.length === 0 ? (
+                    <p className="text-[11px] font-mono italic" style={{ color: "#3f3f46" }}>
+                        Waiting for first turn…
+                    </p>
+                ) : (
+                    <div className="flex flex-col gap-1">
+                        <div
+                            className="grid gap-x-2 text-[9px] font-mono uppercase tracking-wider px-2 pb-1"
+                            style={{ gridTemplateColumns: "1.5rem 1fr 1fr 1fr 1fr 1fr", color: "#3f3f46" }}
+                        >
+                            <span>#</span>
+                            <span>STT</span>
+                            <span>EOT</span>
+                            <span>LLM</span>
+                            <span>TTS</span>
+                            <span>Total</span>
+                        </div>
+
+                        {displayed.map((turn, i) => {
+                            const turnNumber = turns.length - i;
+                            const barWidth = Math.min((turn.overall / MAX_OVERALL_MS) * 100, 100);
+                            return (
                                 <div
-                                    className="absolute inset-y-0 left-0 rounded-lg"
-                                    style={{
-                                        width: `${barWidth}%`,
-                                        backgroundColor: barColor(turn.overall),
-                                        opacity: 0.06,
-                                    }}
-                                />
-                                <div
-                                    className="relative grid gap-x-2 items-center"
-                                    style={{ gridTemplateColumns: "1.5rem 1fr 1fr 1fr 1fr 1fr" }}
+                                    key={turnNumber}
+                                    className="relative rounded-lg px-2 py-1.5 overflow-hidden"
+                                    style={{ background: i === 0 ? "rgba(255,255,255,0.04)" : "transparent" }}
                                 >
-                                    <span className="text-[10px] font-mono" style={{ color: "#3f3f46" }}>
-                                        {turnNumber}
-                                    </span>
-                                    {([turn.stt, turn.eou, turn.llm, turn.tts] as number[]).map((ms, j) => (
-                                        <span key={j} className={`text-[10px] font-mono ${phaseColor(ms)}`}>
-                                            {ms}ms
+                                    <div
+                                        className="absolute inset-y-0 left-0 rounded-lg"
+                                        style={{
+                                            width: `${barWidth}%`,
+                                            backgroundColor: barColor(turn.overall),
+                                            opacity: 0.06,
+                                        }}
+                                    />
+                                    <div
+                                        className="relative grid gap-x-2 items-center"
+                                        style={{ gridTemplateColumns: "1.5rem 1fr 1fr 1fr 1fr 1fr" }}
+                                    >
+                                        <span className="text-[10px] font-mono" style={{ color: "#3f3f46" }}>
+                                            {turnNumber}
                                         </span>
-                                    ))}
-                                    <span className={`text-[10px] font-mono font-bold ${overallColor(turn.overall)}`}>
-                                        {turn.overall}ms
-                                    </span>
+                                        {([turn.stt, turn.eou, turn.llm, turn.tts] as number[]).map((ms, j) => (
+                                            <span key={j} className={`text-[10px] font-mono ${phaseColor(ms)}`}>
+                                                {ms}ms
+                                            </span>
+                                        ))}
+                                        <span className={`text-[10px] font-mono font-bold ${overallColor(turn.overall)}`}>
+                                            {turn.overall}ms
+                                        </span>
+                                    </div>
                                 </div>
-                            </div>
-                        );
-                    })}
+                            );
+                        })}
 
-                    <div
-                        className="mt-1 pt-2 border-t text-[9px] font-mono"
-                        style={{ borderColor: "var(--hud-border)", color: "#52525b" }}
-                    >
-                        {turns.length} turn{turns.length !== 1 ? "s" : ""}
+                        <div
+                            className="mt-1 pt-2 border-t text-[9px] font-mono"
+                            style={{ borderColor: "var(--hud-border)", color: "#52525b" }}
+                        >
+                            {turns.length} turn{turns.length !== 1 ? "s" : ""}
+                        </div>
                     </div>
-                </div>
+                )
             )}
 
-            {/* Config strip */}
-            <div className="pt-2 border-t" style={{ borderColor: "var(--hud-border)" }}>
-                <p className="text-[9px] font-mono uppercase tracking-[0.16em] mb-2" style={{ color: "#3f3f46" }}>
-                    Stack
-                </p>
-                <div className="grid grid-cols-2 gap-x-4 gap-y-1">
-                    {config.map(({ label, value }) => (
-                        <div key={label} className="contents">
-                            <span className="text-[10px] font-mono" style={{ color: "#52525b" }}>{label}</span>
-                            <span className="text-[10px] font-mono text-zinc-300 truncate">{value}</span>
+            {/* Config tab */}
+            {tab === "config" && (
+                <div className="flex flex-col gap-3">
+                    <div>
+                        <p className="text-[9px] font-mono uppercase tracking-[0.16em] mb-2" style={{ color: "#3f3f46" }}>
+                            Stack
+                        </p>
+                        <div className="grid grid-cols-2 gap-x-4 gap-y-1">
+                            {config.map(({ label, value }) => (
+                                <div key={label} className="contents">
+                                    <span className="text-[10px] font-mono" style={{ color: "#52525b" }}>{label}</span>
+                                    <span className="text-[10px] font-mono text-zinc-300 truncate">{value}</span>
+                                </div>
+                            ))}
                         </div>
-                    ))}
+                    </div>
+                    {llmSelectorSlot}
+                    {ttsControlsSlot}
                 </div>
-                {llmSelectorSlot}
-                {ttsControlsSlot}
-            </div>
+            )}
         </div>
     );
 }

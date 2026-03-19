@@ -171,8 +171,11 @@ async def my_agent(ctx: agents.JobContext):
     await _publish_config(switchable_llm.current_label())
 
     # Wire data channel handlers
+    # data_received emits a single DataPacket(data, participant, topic, kind)
     @ctx.room.on("data_received")
-    def on_data(payload: bytes, participant, topic: str, **_):
+    def on_data(dp) -> None:
+        topic = dp.topic or ""
+        payload = bytes(dp.data)
         if topic == "llm_override":
             asyncio.create_task(_handle_llm_override(json.loads(payload)))
         elif topic == "tts_config":
@@ -238,8 +241,8 @@ async def my_agent(ctx: agents.JobContext):
 
     await session.generate_reply(
         instructions=(
-            "Greet the user as Volini, state that you specialize in cars only, "
-            "and invite them to ask about any car model, pricing, or latest version."
+            "Introduce yourself as Volini, a car expert. One short sentence only. "
+            "Do not mention specific car models, previous conversations, or cached data."
         )
     )
 
