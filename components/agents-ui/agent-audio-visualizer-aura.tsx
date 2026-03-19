@@ -2,7 +2,8 @@
 
 import { useVoiceAssistant, useLocalParticipant } from "@livekit/components-react";
 import { Track } from "livekit-client";
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
+import { motion } from "framer-motion";
 import { clsx } from "clsx";
 
 type AuraSize = "sm" | "md" | "lg" | "xl";
@@ -10,10 +11,12 @@ type AuraSize = "sm" | "md" | "lg" | "xl";
 export interface AgentAudioVisualizerAuraProps {
     size?: AuraSize;
     color?: string;
-    colorShift?: number; // 0–1, applied as hue-rotate on outer 2 rings
+    colorShift?: number;
     state?: string;
     className?: string;
 }
+
+const BAR_COUNT = 48;
 
 const SIZE_MAP: Record<AuraSize, number> = {
     sm: 120,
@@ -23,25 +26,16 @@ const SIZE_MAP: Record<AuraSize, number> = {
 };
 
 const STATE_COLOR: Record<string, string> = {
-    listening:   "#22c55e",  // emerald green
-    thinking:    "#f59e0b",  // amber
-    speaking:    "#1FD5F9",  // cyan
-    interrupted: "#f97316",  // orange
+    listening:   "#22c55e",
+    thinking:    "#f59e0b",
+    speaking:    "#8B5CF6",
+    interrupted: "#f97316",
 };
-
-// [scale relative to container, base opacity]
-const RINGS: [number, number][] = [
-    [1.00, 0.06],
-    [0.82, 0.10],
-    [0.65, 0.16],
-    [0.50, 0.22],
-    [0.37, 0.30],
-];
 
 export default function AgentAudioVisualizerAura({
     size = "md",
-    color = "#1FD5F9",
-    colorShift = 0,
+    color = "#8B5CF6",
+    colorShift: _colorShift = 0,
     state,
     className,
 }: AgentAudioVisualizerAuraProps) {
@@ -50,174 +44,313 @@ export default function AgentAudioVisualizerAura({
     const currentState = state ?? voiceState;
     const activeColor = STATE_COLOR[currentState] ?? color;
 
-    const ringRefs = useRef<(HTMLDivElement | null)[]>([]);
-    const innerRef = useRef<HTMLDivElement>(null);
-    const scanRef = useRef<HTMLDivElement>(null);
-    const amplitudeRef = useRef(0);
-    const phaseRef = useRef(0);
-
     const px = SIZE_MAP[size];
+    const cx = px / 2;
+    const cy = px / 2;
 
+    // Radii for each layer
+    const orbitRadius = px * 0.48;
+    const arcRadius   = px * 0.38;
+    const barStart    = px * 0.33;
+    const barEnd      = px * 0.47;
+    const orbSize     = px * 0.27;
+
+    // Refs for direct DOM manipulation (frequency bars)
+    const lineRefs = useRef<(SVGLineElement | null)[]>([]);
+
+    // Arc progress ring state (throttled at ~10fps)
+    const [arcOffset, setArcOffset] = useState(0);
+
+    // Animation / audio refs
+    const rafRef       = useRef<number>(0);
+    const frameCounter = useRef(0);
+    const phaseRef     = useRef(0);
+
+    // Precompute bar angles
+    const barAngles = Array.from({ length: BAR_COUNT }, (_, i) =>
+        (i / BAR_COUNT) * 2 * Math.PI
+    );
+
+    // Inner orb framer-motion targets per state
+    const orbTargets = (() => {
+        switch (currentState) {
+            case "speaking":
+                return {
+                    scale: 1.15,
+                    opacity: 0.9,
+                    boxShadow: `0 0 32px 8px ${activeColor}99, 0 0 64px 16px ${activeColor}44`,
+                };
+            case "listening":
+                return {
+                    scale: 1.05,
+                    opacity: 0.75,
+                    boxShadow: `0 0 20px 6px ${activeColor}77, 0 0 40px 10px ${activeColor}33`,
+                };
+            case "thinking":
+                return {
+                    scale: 1.0,
+                    opacity: 0.6,
+                    boxShadow: `0 0 14px 4px ${activeColor}55, 0 0 28px 8px ${activeColor}22`,
+                };
+            default: // idle
+                return {
+                    scale: 0.85,
+                    opacity: 0.35,
+                    boxShadow: `0 0 8px 2px ${activeColor}33, 0 0 16px 4px ${activeColor}11`,
+                };
+        }
+    })();
+
+    // Orbit ring rotation speed
+    const orbitDuration = currentState === "speaking" ? 6 : 15;
+
+    // Arc circumference
+    const arcCircumference = 2 * Math.PI * arcRadius;
+
+    // rAF loop for frequency bars + arc offset
     useEffect(() => {
         let audioCtx: AudioContext | null = null;
-        let analyser: AnalyserNode | null = null;
         let mediaSource: MediaStreamAudioSourceNode | null = null;
-        let animId: number;
 
         const micTrack = localParticipant
             ?.getTrackPublication(Track.Source.Microphone)
             ?.track?.mediaStreamTrack;
 
-        const setupAudio = () => {
-            // During listening, analyse the user's mic; during speaking, the agent's audio
-            const track = currentState === "listening"
-                ? micTrack
-                : audioTrack?.publication?.track?.mediaStreamTrack;
-            if (!track) return;
+        const setupAudio = (): AnalyserNode | null => {
+            const track =
+                currentState === "listening"
+                    ? micTrack
+                    : audioTrack?.publication?.track?.mediaStreamTrack;
+            if (!track) return null;
             try {
                 audioCtx = new AudioContext();
-                analyser = audioCtx.createAnalyser();
-                analyser.fftSize = 256;
+                const node = audioCtx.createAnalyser();
+                node.fftSize = 256;
                 const stream = new MediaStream([track]);
                 mediaSource = audioCtx.createMediaStreamSource(stream);
-                mediaSource.connect(analyser);
+                mediaSource.connect(node);
+                return node;
             } catch {
                 audioCtx = null;
+                return null;
             }
         };
 
-        setupAudio();
+        const activeAnalyser = setupAudio();
+        const binCount = activeAnalyser ? activeAnalyser.frequencyBinCount : 128;
+        const fftData = new Uint8Array(binCount);
+        const step = binCount / BAR_COUNT;
 
         const animate = () => {
-            if (analyser) {
-                const data = new Uint8Array(analyser.frequencyBinCount);
-                analyser.getByteFrequencyData(data);
-                const avg = data.reduce((a, b) => a + b, 0) / data.length;
-                amplitudeRef.current = Math.min(1, avg / 100);
-            } else {
-                amplitudeRef.current = Math.max(0, amplitudeRef.current - 0.012);
-            }
-
-            const phaseStep =
-                currentState === "speaking"    ? 0.030 :
-                currentState === "listening"   ? 0.010 :
-                currentState === "thinking"    ? 0.014 :
-                0.004;
-
-            phaseRef.current += phaseStep;
+            frameCounter.current += 1;
+            phaseRef.current += 0.04;
             const phase = phaseRef.current;
-            const amp = amplitudeRef.current;
 
-            const isSpeaking  = currentState === "speaking";
-            const isListening = currentState === "listening";
-            const isThinking  = currentState === "thinking";
-            const isActive    = isSpeaking || isListening || isThinking;
+            if (activeAnalyser) {
+                activeAnalyser.getByteFrequencyData(fftData);
+            }
 
-            // Update each ring
-            ringRefs.current.forEach((ring, i) => {
-                if (!ring) return;
+            // Update frequency bars via direct DOM
+            for (let i = 0; i < BAR_COUNT; i++) {
+                const line = lineRefs.current[i];
+                if (!line) continue;
 
-                const ringPhase = phase + i * 0.45;
-                const pulse = Math.sin(ringPhase) * 0.5 + 0.5; // 0–1
+                const rawVal = activeAnalyser
+                    ? fftData[Math.floor(i * step)]
+                    : 0;
+                // Normalize 0–255 → 0–1; add gentle idle flicker
+                const idleFlicker = (Math.sin(phase + i * 0.3) * 0.5 + 0.5) * 0.04;
+                const norm = activeAnalyser
+                    ? Math.min(1, rawVal / 255) * 0.95 + idleFlicker
+                    : idleFlicker;
 
-                let scale = 1;
-                let opacity = RINGS[i][1];
-                let borderColor = activeColor;
+                const angle = barAngles[i];
+                const cosA  = Math.cos(angle);
+                const sinA  = Math.sin(angle);
 
-                if (isSpeaking) {
-                    scale = 1 + amp * (0.10 + i * 0.035) + pulse * 0.025;
-                    opacity = 0.18 + amp * 0.55 + pulse * 0.08;
-                } else if (isListening) {
-                    const active = i >= 2;
-                    scale = active ? 1 + amp * (0.06 + i * 0.02) + pulse * 0.025 : 1;
-                    opacity = active ? 0.18 + amp * 0.45 + pulse * 0.12 : RINGS[i][1];
-                } else if (isThinking) {
-                    scale = 1 + pulse * 0.04;
-                    opacity = 0.12 + pulse * 0.18;
+                const innerR = barStart;
+                const outerR = barStart + (barEnd - barStart) * norm;
+
+                line.setAttribute("x1", String((cx + cosA * innerR).toFixed(2)));
+                line.setAttribute("y1", String((cy + sinA * innerR).toFixed(2)));
+                line.setAttribute("x2", String((cx + cosA * outerR).toFixed(2)));
+                line.setAttribute("y2", String((cy + sinA * outerR).toFixed(2)));
+                line.style.opacity = String((0.1 + norm * 0.9).toFixed(3));
+            }
+
+            // Throttle arc offset update to ~10fps (every 6 frames at 60fps)
+            if (frameCounter.current % 6 === 0) {
+                const avgAmp = activeAnalyser
+                    ? Array.from(fftData).reduce((a, b) => a + b, 0) / fftData.length / 255
+                    : 0;
+
+                let newOffset: number;
+                if (currentState === "speaking") {
+                    // Fill driven by amplitude (0–100%)
+                    newOffset = arcCircumference * (1 - avgAmp);
+                } else if (currentState === "listening") {
+                    // Slow 0–100% pulse cycling every 2s (~120 frames at 60fps)
+                    const t = (frameCounter.current % 120) / 120;
+                    newOffset = arcCircumference * (1 - t);
+                } else if (currentState === "thinking") {
+                    // Partial arc (40%) rotating — offset just controls fill amount
+                    newOffset = arcCircumference * 0.6;
                 } else {
-                    // Idle: slow single pulse on outermost ring only
-                    scale = i === 0 ? 1 + pulse * 0.015 : 1;
-                    opacity = i === 0 ? 0.08 + pulse * 0.06 : RINGS[i][1] * 0.7;
+                    newOffset = arcCircumference; // fully hidden
                 }
-
-                ring.style.transform = `scale(${scale.toFixed(4)})`;
-                ring.style.opacity = String(Math.min(opacity, 0.9).toFixed(3));
-                ring.style.borderColor = borderColor;
-
-                // Hue shift outer 2 rings for depth
-                if (i < 2 && colorShift > 0) {
-                    ring.style.filter = `hue-rotate(${(colorShift * 180).toFixed(1)}deg)`;
-                }
-            });
-
-            // Inner glow circle
-            if (innerRef.current) {
-                const glowR = isSpeaking ? Math.round(18 + amp * 32) : isListening ? Math.round(12 + amp * 20) : isActive ? 14 : 8;
-                const glowA = isSpeaking ? 0.28 + amp * 0.45 : isListening ? 0.18 + amp * 0.30 : isActive ? 0.18 : 0.10;
-                innerRef.current.style.boxShadow =
-                    `0 0 ${glowR}px ${activeColor}${Math.round(glowA * 255).toString(16).padStart(2, "0")}, ` +
-                    `0 0 ${glowR * 2}px ${activeColor}${Math.round(glowA * 0.35 * 255).toString(16).padStart(2, "0")}`;
-                innerRef.current.style.backgroundColor = activeColor;
-                innerRef.current.style.opacity = String(isActive ? 0.85 : 0.45);
+                setArcOffset(newOffset);
             }
 
-            // Scan line — visible only when thinking
-            if (scanRef.current) {
-                scanRef.current.style.display = isThinking ? "block" : "none";
-            }
-
-            animId = requestAnimationFrame(animate);
+            rafRef.current = requestAnimationFrame(animate);
         };
 
-        animId = requestAnimationFrame(animate);
+        rafRef.current = requestAnimationFrame(animate);
 
         return () => {
-            cancelAnimationFrame(animId);
+            cancelAnimationFrame(rafRef.current);
             if (mediaSource) mediaSource.disconnect();
             if (audioCtx) audioCtx.close();
         };
-    }, [currentState, audioTrack, localParticipant, colorShift, color, activeColor]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [currentState, audioTrack, localParticipant]);
+
+    // Thinking arc rotation angle (slow, driven by framer-motion separately)
+    const thinkingRotate = currentState === "thinking" ? 360 : 0;
 
     return (
         <div
             className={clsx("relative flex items-center justify-center", className)}
             style={{ width: px, height: px }}
         >
-            {/* Concentric rings */}
-            {RINGS.map(([scale, baseOpacity], i) => (
-                <div
-                    key={i}
-                    ref={(el) => { ringRefs.current[i] = el; }}
-                    className="absolute rounded-full"
-                    style={{
-                        width: `${scale * 100}%`,
-                        height: `${scale * 100}%`,
-                        border: `1px solid ${activeColor}`,
-                        opacity: baseOpacity,
-                        willChange: "transform, opacity",
-                        transition: "border-color 0.4s ease",
-                    }}
-                />
-            ))}
-
-            {/* Scan line overlay — thinking state */}
-            <div
-                ref={scanRef}
-                className="scan-line-overlay"
-                style={{ display: "none", borderRadius: "50%", overflow: "hidden" }}
-            />
-
-            {/* Inner glow circle */}
-            <div
-                ref={innerRef}
-                className="absolute rounded-full"
+            {/* ── Layer 1: Outer orbit ring ── */}
+            <motion.div
                 style={{
-                    width: "27%",
-                    height: "27%",
+                    position: "absolute",
+                    width: "100%",
+                    height: "100%",
+                }}
+                animate={{ rotate: 360 }}
+                transition={{
+                    repeat: Infinity,
+                    ease: "linear",
+                    duration: orbitDuration,
+                }}
+            >
+                <svg
+                    style={{ position: "absolute", width: "100%", height: "100%" }}
+                    viewBox={`0 0 ${px} ${px}`}
+                    overflow="visible"
+                >
+                    <circle
+                        cx={cx}
+                        cy={cy}
+                        r={orbitRadius}
+                        fill="none"
+                        stroke={activeColor}
+                        strokeWidth={1}
+                        strokeDasharray="4 8"
+                        strokeOpacity={0.25}
+                    />
+                </svg>
+            </motion.div>
+
+            {/* ── Layer 2: Frequency ring (48 radial bars) ── */}
+            <svg
+                style={{ position: "absolute", width: "100%", height: "100%" }}
+                viewBox={`0 0 ${px} ${px}`}
+                overflow="visible"
+            >
+                {barAngles.map((angle, i) => {
+                    const cosA = Math.cos(angle);
+                    const sinA = Math.sin(angle);
+                    return (
+                        <line
+                            key={i}
+                            ref={(el) => { lineRefs.current[i] = el; }}
+                            x1={(cx + cosA * barStart).toFixed(2)}
+                            y1={(cy + sinA * barStart).toFixed(2)}
+                            x2={(cx + cosA * barStart).toFixed(2)}
+                            y2={(cy + sinA * barStart).toFixed(2)}
+                            stroke={activeColor}
+                            strokeWidth={2}
+                            strokeLinecap="round"
+                            opacity={0.1}
+                        />
+                    );
+                })}
+            </svg>
+
+            {/* ── Layer 3: Arc progress ring ── */}
+            <svg
+                style={{ position: "absolute", width: "100%", height: "100%" }}
+                viewBox={`0 0 ${px} ${px}`}
+                overflow="visible"
+            >
+                {/* Background arc track */}
+                <circle
+                    cx={cx}
+                    cy={cy}
+                    r={arcRadius}
+                    fill="none"
+                    stroke={activeColor}
+                    strokeWidth={1.5}
+                    strokeOpacity={0.12}
+                />
+                {/* Animated arc — rotate the group for thinking state */}
+                <motion.g
+                    animate={currentState === "thinking" ? { rotate: 360 } : { rotate: 0 }}
+                    transition={
+                        currentState === "thinking"
+                            ? { repeat: Infinity, ease: "linear", duration: 8 }
+                            : { duration: 0.5 }
+                    }
+                    style={{ transformOrigin: `${cx}px ${cy}px` }}
+                >
+                    <circle
+                        cx={cx}
+                        cy={cy}
+                        r={arcRadius}
+                        fill="none"
+                        stroke={activeColor}
+                        strokeWidth={2}
+                        strokeLinecap="round"
+                        strokeOpacity={0.7}
+                        strokeDasharray={arcCircumference}
+                        strokeDashoffset={arcOffset}
+                        style={{
+                            transformOrigin: `${cx}px ${cy}px`,
+                            transform: "rotate(-90deg)",
+                            transition: "stroke-dashoffset 0.1s linear, stroke 0.4s ease",
+                        }}
+                    />
+                </motion.g>
+            </svg>
+
+            {/* ── Layer 4: Inner glow orb ── */}
+            <motion.div
+                style={{
+                    position: "absolute",
+                    width: orbSize,
+                    height: orbSize,
+                    borderRadius: "50%",
                     backgroundColor: activeColor,
-                    opacity: 0.10,
-                    willChange: "box-shadow, opacity, background-color",
-                    transition: "opacity 0.4s ease, background-color 0.4s ease",
+                    willChange: "transform, opacity, box-shadow",
+                }}
+                animate={{
+                    scale: orbTargets.scale,
+                    opacity: orbTargets.opacity,
+                    boxShadow: orbTargets.boxShadow,
+                }}
+                transition={{
+                    duration: 0.5,
+                    ease: "easeInOut",
+                    ...(currentState === "thinking"
+                        ? {
+                              repeat: Infinity,
+                              repeatType: "reverse" as const,
+                              duration: 1.2,
+                          }
+                        : {}),
                 }}
             />
         </div>

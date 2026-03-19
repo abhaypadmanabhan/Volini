@@ -2,7 +2,11 @@
 
 import { LiveKitRoom, RoomAudioRenderer } from "@livekit/components-react";
 import { useState } from "react";
-import { ArrowRight, Mic, Zap, BarChart2 } from "lucide-react";
+import { motion, AnimatePresence } from "framer-motion";
+import { ArrowRight, Mic, Zap, BarChart2, Database, Cpu, Sliders, ChevronRight } from "lucide-react";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Card, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import AssistantInterface from "../components/AssistantInterface";
 
 /* ── Landing page ──────────────────────────────────────────────── */
@@ -18,102 +22,185 @@ function LandingPage({
 }) {
     return (
         <div className="min-h-screen bg-[#09090b] text-white overflow-x-hidden">
+            {/* Nav ──────────────────────────────────────────────── */}
+            <nav
+                className="sticky top-0 z-50 flex items-center justify-between px-6 py-3 border-b"
+                style={{
+                    background: "rgba(9,9,11,0.8)",
+                    backdropFilter: "blur(12px)",
+                    WebkitBackdropFilter: "blur(12px)",
+                    borderColor: "var(--hud-border)",
+                }}
+            >
+                <span
+                    className="gradient-text font-black tracking-[-0.04em] text-xl"
+                >
+                    VOLINI
+                </span>
+                <Button
+                    variant="default"
+                    size="sm"
+                    onClick={onConnect}
+                    disabled={connecting}
+                    className="flex items-center gap-2"
+                >
+                    {connecting ? (
+                        <>
+                            <span className="w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                            Connecting…
+                        </>
+                    ) : (
+                        <>
+                            Wake up Volini
+                            <ArrowRight className="w-3.5 h-3.5" />
+                        </>
+                    )}
+                </Button>
+            </nav>
+
             {/* Hero ─────────────────────────────────────────────── */}
             <section className="relative flex flex-col items-center justify-center min-h-screen px-6 text-center overflow-hidden">
-                {/* Radial glow at bottom-center */}
+                {/* Dot-grid background */}
                 <div
-                    className="absolute bottom-0 left-1/2 -translate-x-1/2 w-[600px] h-[320px] pointer-events-none"
+                    className="absolute inset-0 pointer-events-none"
                     style={{
-                        background:
-                            "radial-gradient(ellipse at 50% 100%, rgba(31,213,249,0.12) 0%, transparent 70%)",
+                        backgroundImage: "radial-gradient(circle, rgba(255,255,255,0.04) 1px, transparent 1px)",
+                        backgroundSize: "28px 28px",
+                    }}
+                />
+                {/* Radial violet glow */}
+                <div
+                    className="absolute inset-0 pointer-events-none"
+                    style={{
+                        background: "radial-gradient(ellipse 60% 50% at 50% 40%, rgba(139,92,246,0.15) 0%, transparent 70%)",
                     }}
                 />
 
-                {/* Speed lines */}
-                <SpeedLines />
+                {/* Decorative orb */}
+                <motion.div
+                    className="animate-float mb-8 relative flex items-center justify-center"
+                    style={{ width: 200, height: 200 }}
+                    initial={{ opacity: 0, y: 20 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ delay: 0, duration: 0.6 }}
+                >
+                    {/* Pulsing ring */}
+                    <div
+                        className="absolute rounded-full"
+                        style={{
+                            width: 200,
+                            height: 200,
+                            border: "1px solid rgba(139,92,246,0.3)",
+                            animation: "ring-pulse 3s ease-out infinite",
+                        }}
+                    />
+                    {/* Orb */}
+                    <div
+                        className="rounded-full"
+                        style={{
+                            width: 140,
+                            height: 140,
+                            borderRadius: "50%",
+                            background: "radial-gradient(circle, rgba(139,92,246,0.3) 0%, rgba(139,92,246,0.05) 60%, transparent 100%)",
+                        }}
+                    />
+                </motion.div>
 
                 {/* Eyebrow badge */}
-                <div
-                    className="animate-fade-up mb-6 inline-flex items-center gap-2 px-3 py-1 rounded-full border border-white/10 bg-white/[0.03]"
-                    style={{ animationDelay: "0ms" }}
+                <motion.div
+                    className="mb-6"
+                    initial={{ opacity: 0, y: 20 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ delay: 0.1, duration: 0.6 }}
                 >
-                    <span
-                        className="w-1.5 h-1.5 rounded-full animate-accent-pulse"
-                        style={{ backgroundColor: "var(--accent)" }}
-                    />
-                    <span
-                        className="text-[11px] font-mono uppercase tracking-[0.18em]"
-                        style={{ color: "var(--accent)" }}
-                    >
-                        AI Voice Assistant
-                    </span>
-                </div>
+                    <Badge variant="secondary" className="flex items-center gap-2 px-3 py-1">
+                        <span
+                            className="w-1.5 h-1.5 rounded-full"
+                            style={{ backgroundColor: "var(--accent)" }}
+                        />
+                        AI Voice Assistant for Cars
+                    </Badge>
+                </motion.div>
 
-                {/* Hero wordmark */}
-                <h1
-                    className="animate-fade-up font-black tracking-[-0.04em] leading-none text-white"
+                {/* H1 */}
+                <motion.h1
+                    className="gradient-text font-black tracking-[-0.04em]"
                     style={{
                         fontSize: "clamp(5rem, 14vw, 12rem)",
-                        animationDelay: "60ms",
+                        lineHeight: 1,
                     }}
+                    initial={{ opacity: 0, y: 20 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ delay: 0.16, duration: 0.6 }}
                 >
                     VOLINI
-                </h1>
+                </motion.h1>
 
-                {/* Subtext */}
-                <p
-                    className="animate-fade-up mt-5 text-[1.1rem] font-light tracking-wide"
-                    style={{ color: "#71717a", animationDelay: "160ms" }}
+                {/* Tagline */}
+                <motion.p
+                    className="mt-5 text-[1.1rem] font-light tracking-wide text-zinc-400"
+                    initial={{ opacity: 0, y: 20 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ delay: 0.24, duration: 0.6 }}
                 >
-                    Your AI co-pilot. Every drive.
-                </p>
+                    Your AI co-pilot for every drive.
+                </motion.p>
+
+                {/* Sub-tagline */}
+                <motion.p
+                    className="mt-3 text-[0.75rem] font-mono text-zinc-600"
+                    initial={{ opacity: 0, y: 20 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ delay: 0.3, duration: 0.6 }}
+                >
+                    Sub-second latency · Local STT · Live recall data
+                </motion.p>
 
                 {/* CTA */}
-                <div
-                    className="animate-fade-up mt-10 flex flex-col items-center gap-4"
-                    style={{ animationDelay: "280ms" }}
+                <motion.div
+                    className="mt-10 flex flex-col items-center gap-4"
+                    initial={{ opacity: 0, y: 20 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ delay: 0.38, duration: 0.6 }}
                 >
-                    {error && (
-                        <p className="text-sm text-red-400 bg-red-500/10 border border-red-500/20 px-4 py-2 rounded-xl">
-                            {error}
-                        </p>
-                    )}
-
-                    <button
+                    <Button
+                        variant="default"
+                        size="lg"
                         onClick={onConnect}
                         disabled={connecting}
-                        className="group relative flex items-center gap-3 px-8 py-4 rounded-full font-semibold text-[#09090b] transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed hover:scale-[1.03] active:scale-[0.98]"
-                        style={{
-                            backgroundColor: "var(--accent)",
-                            boxShadow: "0 0 32px rgba(31,213,249,0.3), 0 0 64px rgba(31,213,249,0.1)",
-                        }}
+                        className="flex items-center gap-3"
                     >
                         {connecting ? (
                             <>
-                                <span className="w-4 h-4 border-2 border-[#09090b]/30 border-t-[#09090b] rounded-full animate-spin" />
+                                <span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
                                 Connecting…
                             </>
                         ) : (
                             <>
                                 Wake up Volini
-                                <ArrowRight className="w-4 h-4 transition-transform duration-300 group-hover:translate-x-0.5" />
+                                <ArrowRight className="w-4 h-4" />
                             </>
                         )}
-                    </button>
+                    </Button>
+                </motion.div>
 
-                    {/* Tech stack hint */}
-                    <p
-                        className="text-[11px] font-mono tracking-wider"
-                        style={{ color: "#3f3f46" }}
-                    >
-                        Faster Whisper · GPT-4.1-mini · Kokoro TTS
-                    </p>
-                </div>
+                {/* Error */}
+                <AnimatePresence>
+                    {error && (
+                        <motion.p
+                            className="mt-4 text-sm text-red-400 bg-red-500/10 border border-red-500/20 px-4 py-2 rounded-xl"
+                            initial={{ opacity: 0 }}
+                            animate={{ opacity: 1 }}
+                            exit={{ opacity: 0 }}
+                        >
+                            {error}
+                        </motion.p>
+                    )}
+                </AnimatePresence>
 
                 {/* Scroll indicator */}
                 <div
-                    className="absolute bottom-8 left-1/2 -translate-x-1/2 animate-fade-in"
-                    style={{ animationDelay: "600ms", color: "#27272a" }}
+                    className="absolute bottom-8 left-1/2 -translate-x-1/2 text-zinc-800"
                 >
                     <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
                         <path d="M10 4v12M4 10l6 6 6-6" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
@@ -121,107 +208,233 @@ function LandingPage({
                 </div>
             </section>
 
-            {/* Features ─────────────────────────────────────────── */}
+            {/* How It Works ─────────────────────────────────────── */}
             <section className="px-6 py-24 max-w-5xl mx-auto">
-                <p
-                    className="text-[11px] font-mono uppercase tracking-[0.2em] mb-12 text-center"
-                    style={{ color: "var(--accent)" }}
-                >
-                    Capabilities
-                </p>
+                <div className="text-center mb-16">
+                    <div
+                        className="inline-block w-8 h-0.5 mb-4"
+                        style={{ backgroundColor: "var(--accent)" }}
+                    />
+                    <h2 className="text-2xl font-bold text-white">How it works</h2>
+                </div>
 
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                    <FeatureCard
-                        icon={<Mic className="w-5 h-5" />}
-                        title="Ask Anything"
-                        body="Real-time answers about any car, model, trim, or spec — just speak."
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-8 relative">
+                    {/* Connector line on desktop */}
+                    <div
+                        className="hidden md:block absolute top-8 left-[calc(16.67%+1rem)] right-[calc(16.67%+1rem)] h-px pointer-events-none"
+                        style={{
+                            background: "linear-gradient(90deg, transparent, var(--accent), transparent)",
+                            opacity: 0.3,
+                        }}
                     />
-                    <FeatureCard
-                        icon={<Zap className="w-5 h-5" />}
-                        title="Real-Time Intelligence"
-                        body="Instant NHTSA safety data and market price signals on demand."
-                    />
-                    <FeatureCard
-                        icon={<BarChart2 className="w-5 h-5" />}
-                        title="Performance Metrics"
-                        body="Per-turn STT · LLM · TTS latency, always visible."
-                    />
+
+                    {[
+                        {
+                            num: "01",
+                            title: "Speak",
+                            body: "Ask anything about any car — models, pricing, specs, recalls",
+                        },
+                        {
+                            num: "02",
+                            title: "Volini listens",
+                            body: "Faster Whisper STT + Silero VAD process your voice locally in real time",
+                        },
+                        {
+                            num: "03",
+                            title: "You hear the answer",
+                            body: "GPT-4.1-mini + Kokoro TTS deliver a voiced answer in under a second",
+                        },
+                    ].map((step, i) => (
+                        <motion.div
+                            key={step.num}
+                            className="text-center"
+                            initial={{ opacity: 0, y: 20 }}
+                            whileInView={{ opacity: 1, y: 0 }}
+                            viewport={{ once: true }}
+                            transition={{ delay: i * 0.15, duration: 0.6 }}
+                        >
+                            <div className="text-5xl font-black gradient-text opacity-40 mb-4">
+                                {step.num}
+                            </div>
+                            <h3 className="text-sm font-semibold text-white mb-2">{step.title}</h3>
+                            <p className="text-xs text-zinc-500 leading-relaxed">{step.body}</p>
+                        </motion.div>
+                    ))}
                 </div>
             </section>
 
-            {/* Tech strip ───────────────────────────────────────── */}
-            <div
-                className="border-y px-6 py-4 text-center font-mono text-[11px] tracking-wider"
-                style={{
-                    borderColor: "var(--hud-border)",
-                    color: "#3f3f46",
-                }}
+            {/* Features Grid ────────────────────────────────────── */}
+            <section className="px-6 py-24 max-w-5xl mx-auto">
+                <div className="text-center mb-16">
+                    <div
+                        className="inline-block w-8 h-0.5 mb-4"
+                        style={{ backgroundColor: "var(--accent)" }}
+                    />
+                    <h2 className="text-2xl font-bold text-white">Everything you need</h2>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                    {[
+                        { icon: <Mic className="w-5 h-5" />, title: "Ask Anything", body: "Any car, model, trim, spec — just speak" },
+                        { icon: <Zap className="w-5 h-5" />, title: "Sub-second", body: "STT + LLM + TTS pipeline optimized for latency" },
+                        { icon: <Database className="w-5 h-5" />, title: "Live data", body: "NHTSA safety recalls and MSRP signals via DuckDuckGo" },
+                        { icon: <BarChart2 className="w-5 h-5" />, title: "Latency HUD", body: "Per-turn STT/LLM/TTS breakdown always visible" },
+                        { icon: <Cpu className="w-5 h-5" />, title: "Runs locally", body: "Faster Whisper and Silero VAD run on-device" },
+                        { icon: <Sliders className="w-5 h-5" />, title: "Switch models", body: "Toggle between GPT-4.1 and local Ollama in real time" },
+                    ].map((feature, i) => (
+                        <motion.div
+                            key={feature.title}
+                            whileHover={{ y: -4 }}
+                            transition={{ duration: 0.2 }}
+                            initial={{ opacity: 0, y: 20 }}
+                            whileInView={{ opacity: 1, y: 0 }}
+                            viewport={{ once: true }}
+                        >
+                            <Card
+                                className="h-full border transition-colors duration-300 hover:bg-white/[0.03]"
+                                style={{
+                                    borderColor: "var(--hud-border)",
+                                    background: "var(--surface)",
+                                }}
+                            >
+                                <CardHeader>
+                                    <div
+                                        className="mb-3 w-9 h-9 flex items-center justify-center rounded-xl"
+                                        style={{
+                                            backgroundColor: "var(--accent-dim)",
+                                            color: "var(--accent)",
+                                        }}
+                                    >
+                                        {feature.icon}
+                                    </div>
+                                    <CardTitle className="text-sm font-semibold text-white">{feature.title}</CardTitle>
+                                    <CardDescription className="text-xs text-zinc-500">{feature.body}</CardDescription>
+                                </CardHeader>
+                            </Card>
+                        </motion.div>
+                    ))}
+                </div>
+            </section>
+
+            {/* Tech Pipeline ────────────────────────────────────── */}
+            <section className="px-6 py-24 max-w-5xl mx-auto">
+                <div className="text-center mb-16">
+                    <div
+                        className="inline-block w-8 h-0.5 mb-4"
+                        style={{ backgroundColor: "var(--accent)" }}
+                    />
+                    <h2 className="text-2xl font-bold text-white">The pipeline</h2>
+                </div>
+
+                <div className="flex flex-wrap items-center justify-center gap-2">
+                    {[
+                        { name: "VAD", subtitle: "Silero" },
+                        { name: "STT", subtitle: "Faster Whisper" },
+                        { name: "LLM", subtitle: "GPT-4.1" },
+                        { name: "TTS", subtitle: "Kokoro" },
+                    ].map((node, i) => (
+                        <div key={node.name} className="flex items-center gap-2">
+                            <div
+                                className="px-4 py-3 rounded-xl border text-center min-w-[80px]"
+                                style={{
+                                    borderColor: "var(--hud-border)",
+                                    background: "var(--surface)",
+                                }}
+                            >
+                                <div className="text-xs font-semibold text-white">{node.name}</div>
+                                <div className="text-[10px] text-zinc-500 mt-0.5">{node.subtitle}</div>
+                            </div>
+                            {i < 3 && (
+                                <ChevronRight
+                                    className="w-4 h-4 flex-shrink-0"
+                                    style={{ color: "var(--accent)" }}
+                                />
+                            )}
+                        </div>
+                    ))}
+                    <div className="flex items-center gap-2">
+                        <ChevronRight
+                            className="w-4 h-4 flex-shrink-0"
+                            style={{ color: "var(--accent)" }}
+                        />
+                        <div
+                            className="px-4 py-3 rounded-xl border text-center"
+                            style={{
+                                borderColor: "var(--hud-border)",
+                                background: "var(--surface)",
+                            }}
+                        >
+                            <div className="text-lg">🔊</div>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            {/* Bottom CTA ───────────────────────────────────────── */}
+            <section
+                className="relative px-6 py-32 text-center overflow-hidden"
             >
-                VAD: Silero&nbsp;&nbsp;·&nbsp;&nbsp;STT: Faster Whisper&nbsp;&nbsp;·&nbsp;&nbsp;LLM: GPT-4.1 mini&nbsp;&nbsp;·&nbsp;&nbsp;TTS: Kokoro ONNX
-            </div>
-
-            {/* Footer gap */}
-            <div className="h-16" />
-        </div>
-    );
-}
-
-function FeatureCard({
-    icon,
-    title,
-    body,
-}: {
-    icon: React.ReactNode;
-    title: string;
-    body: string;
-}) {
-    return (
-        <div
-            className="hud-corner group relative p-6 rounded-2xl border transition-all duration-300 hover:bg-white/[0.03]"
-            style={{
-                borderColor: "var(--hud-border)",
-                background: "var(--surface)",
-            }}
-        >
-            <div
-                className="mb-4 w-9 h-9 flex items-center justify-center rounded-xl"
-                style={{
-                    backgroundColor: "var(--accent-dim)",
-                    color: "var(--accent)",
-                }}
-            >
-                {icon}
-            </div>
-            <h3 className="text-sm font-semibold text-white mb-2">{title}</h3>
-            <p className="text-xs leading-relaxed" style={{ color: "#71717a" }}>
-                {body}
-            </p>
-        </div>
-    );
-}
-
-function SpeedLines() {
-    return (
-        <div className="absolute inset-0 pointer-events-none overflow-hidden" aria-hidden>
-            {[
-                { top: "32%", left: "8%",  width: 180, rotate: -8,  delay: "0s",    duration: "4s" },
-                { top: "58%", right: "6%", width: 120, rotate: 6,   delay: "1.4s",  duration: "5s" },
-                { top: "22%", right: "18%",width: 80,  rotate: -12, delay: "2.8s",  duration: "4.5s" },
-            ].map((line, i) => (
+                {/* Violet radial glow */}
                 <div
-                    key={i}
-                    className="absolute h-px"
+                    className="absolute inset-0 pointer-events-none"
                     style={{
-                        top: line.top,
-                        left: "left" in line ? line.left : undefined,
-                        right: "right" in line ? line.right : undefined,
-                        width: line.width,
-                        background: `linear-gradient(90deg, transparent, rgba(31,213,249,0.3), transparent)`,
-                        transform: `rotate(${line.rotate}deg)`,
-                        animation: `speed-line ${line.duration} ease-in-out ${line.delay} infinite`,
+                        background: "radial-gradient(ellipse 70% 60% at 50% 50%, rgba(139,92,246,0.12) 0%, transparent 70%)",
                     }}
                 />
-            ))}
+                <div className="relative z-10 max-w-5xl mx-auto">
+                    <motion.h2
+                        className="gradient-text text-4xl font-black tracking-[-0.03em] mb-4"
+                        initial={{ opacity: 0, y: 20 }}
+                        whileInView={{ opacity: 1, y: 0 }}
+                        viewport={{ once: true }}
+                        transition={{ duration: 0.6 }}
+                    >
+                        Ready to drive smarter?
+                    </motion.h2>
+                    <motion.p
+                        className="text-zinc-400 mb-10"
+                        initial={{ opacity: 0, y: 20 }}
+                        whileInView={{ opacity: 1, y: 0 }}
+                        viewport={{ once: true }}
+                        transition={{ delay: 0.1, duration: 0.6 }}
+                    >
+                        Ask Volini about any car, anytime.
+                    </motion.p>
+                    <motion.div
+                        initial={{ opacity: 0, y: 20 }}
+                        whileInView={{ opacity: 1, y: 0 }}
+                        viewport={{ once: true }}
+                        transition={{ delay: 0.2, duration: 0.6 }}
+                    >
+                        <Button
+                            variant="default"
+                            size="lg"
+                            onClick={onConnect}
+                            disabled={connecting}
+                            className="flex items-center gap-3 mx-auto"
+                        >
+                            {connecting ? (
+                                <>
+                                    <span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                                    Connecting…
+                                </>
+                            ) : (
+                                <>
+                                    Wake up Volini
+                                    <ArrowRight className="w-4 h-4" />
+                                </>
+                            )}
+                        </Button>
+                    </motion.div>
+                </div>
+            </section>
+
+            {/* Footer ───────────────────────────────────────────── */}
+            <footer className="px-6 py-8 text-center">
+                <p className="text-xs font-mono text-zinc-700">
+                    © 2026 Volini · Built with LiveKit, OpenAI, Faster Whisper, Kokoro TTS
+                </p>
+            </footer>
         </div>
     );
 }

@@ -107,11 +107,11 @@ export default function MetricsPanel({ turns, agentConfig, llmSelectorSlot, ttsC
                         onClick={() => setTab(t)}
                         className="text-[10px] font-mono uppercase tracking-wider px-3 py-1 rounded-md transition-all duration-150"
                         style={{
-                            background: tab === t ? "rgba(31,213,249,0.10)" : "rgba(255,255,255,0.03)",
-                            color: tab === t ? "#1FD5F9" : "#52525b",
+                            background: tab === t ? "rgba(139,92,246,0.10)" : "rgba(255,255,255,0.03)",
+                            color: tab === t ? "#8B5CF6" : "#52525b",
                             borderWidth: "1px",
                             borderStyle: "solid",
-                            borderColor: tab === t ? "rgba(31,213,249,0.25)" : "var(--hud-border)",
+                            borderColor: tab === t ? "rgba(139,92,246,0.25)" : "var(--hud-border)",
                         }}
                     >
                         {t}
@@ -136,8 +136,8 @@ export default function MetricsPanel({ turns, agentConfig, llmSelectorSlot, ttsC
                                 <AreaChart data={turns.slice(-10).map((t, i) => ({ turn: i + 1, ms: t.overall }))} margin={{ top: 4, right: 4, bottom: 0, left: -20 }}>
                                     <defs>
                                         <linearGradient id="overallGrad" x1="0" y1="0" x2="0" y2="1">
-                                            <stop offset="5%" stopColor="#1FD5F9" stopOpacity={0.3} />
-                                            <stop offset="95%" stopColor="#1FD5F9" stopOpacity={0} />
+                                            <stop offset="5%" stopColor="#8B5CF6" stopOpacity={0.3} />
+                                            <stop offset="95%" stopColor="#8B5CF6" stopOpacity={0} />
                                         </linearGradient>
                                     </defs>
                                     <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" />
@@ -146,12 +146,12 @@ export default function MetricsPanel({ turns, agentConfig, llmSelectorSlot, ttsC
                                     <Tooltip
                                         contentStyle={{ background: "#18181b", border: "1px solid #27272a", borderRadius: 8, fontSize: 10, fontFamily: "monospace" }}
                                         labelStyle={{ color: "#71717a" }}
-                                        itemStyle={{ color: "#1FD5F9" }}
+                                        itemStyle={{ color: "#8B5CF6" }}
                                         formatter={(v) => [`${v}ms`, "total"]}
                                     />
                                     <ReferenceLine y={700}  stroke="#34d399" strokeDasharray="4 3" strokeOpacity={0.6} />
                                     <ReferenceLine y={1200} stroke="#f59e0b" strokeDasharray="4 3" strokeOpacity={0.6} />
-                                    <Area type="monotone" dataKey="ms" stroke="#1FD5F9" strokeWidth={1.5} fill="url(#overallGrad)" dot={false} />
+                                    <Area type="monotone" dataKey="ms" stroke="#8B5CF6" strokeWidth={1.5} fill="url(#overallGrad)" dot={false} />
                                 </AreaChart>
                             </ResponsiveContainer>
                         </div>
@@ -172,8 +172,8 @@ export default function MetricsPanel({ turns, agentConfig, llmSelectorSlot, ttsC
                                         formatter={(v, name) => [`${v}ms`, String(name).toUpperCase()]}
                                     />
                                     <Bar dataKey="stt" stackId="a" fill="#34d399" radius={[0, 0, 0, 0]} />
-                                    <Bar dataKey="llm" stackId="a" fill="#1FD5F9" radius={[0, 0, 0, 0]} />
-                                    <Bar dataKey="tts" stackId="a" fill="#a78bfa" radius={[2, 2, 0, 0]} />
+                                    <Bar dataKey="llm" stackId="a" fill="#8B5CF6" radius={[0, 0, 0, 0]} />
+                                    <Bar dataKey="tts" stackId="a" fill="#EC4899" radius={[2, 2, 0, 0]} />
                                 </BarChart>
                             </ResponsiveContainer>
                         </div>

@@ -4,6 +4,7 @@ import { useVoiceAssistant, TrackToggle, useDataChannel } from "@livekit/compone
 import { Track } from "livekit-client";
 import { Power } from "lucide-react";
 import { useState, useRef, useEffect } from "react";
+import { motion, AnimatePresence } from "framer-motion";
 import { clsx } from "clsx";
 import MetricsPanel, { TurnMetrics } from "./MetricsPanel";
 import LLMSelector from "./LLMSelector";
@@ -27,7 +28,7 @@ const STATE_LABEL: Record<string, string> = {
 
 const STATE_BADGE_COLOR: Record<string, string> = {
     listening: "bg-emerald-500/20 text-emerald-400 border-emerald-500/30",
-    speaking:  "bg-[rgba(31,213,249,0.15)] text-[#1FD5F9] border-[rgba(31,213,249,0.3)]",
+    speaking:  "bg-[rgba(139,92,246,0.15)] text-[#8B5CF6] border-[rgba(139,92,246,0.3)]",
     thinking:  "bg-amber-500/20 text-amber-400 border-amber-500/30",
 };
 
@@ -107,19 +108,34 @@ export default function AssistantInterface({ onDisconnect }: AssistantInterfaceP
                     <span className="text-sm font-mono font-bold tracking-[0.12em] text-white">
                         VOLINI
                     </span>
-                    <span
-                        className={clsx(
-                            "px-2 py-0.5 text-[10px] font-mono uppercase tracking-wider rounded-full border transition-all duration-400",
-                            badgeClass
+                    <AnimatePresence mode="wait">
+                        <motion.span
+                            key={state}
+                            initial={{ opacity: 0, y: -4 }}
+                            animate={{ opacity: 1, y: 0 }}
+                            exit={{ opacity: 0, y: 4 }}
+                            transition={{ duration: 0.15 }}
+                            className={clsx(
+                                "px-2 py-0.5 text-[10px] font-mono uppercase tracking-wider rounded-full border",
+                                badgeClass
+                            )}
+                        >
+                            {stateLabel}
+                        </motion.span>
+                    </AnimatePresence>
+                    <AnimatePresence>
+                        {isInterrupted && (
+                            <motion.span
+                                initial={{ opacity: 0, scale: 0.9 }}
+                                animate={{ opacity: 1, scale: 1 }}
+                                exit={{ opacity: 0, scale: 0.9 }}
+                                transition={{ duration: 0.15 }}
+                                className="px-2 py-0.5 text-[10px] font-mono uppercase tracking-wider rounded-full border bg-orange-500/15 text-orange-400 border-orange-500/30"
+                            >
+                                interrupted
+                            </motion.span>
                         )}
-                    >
-                        {stateLabel}
-                    </span>
-                    {isInterrupted && (
-                        <span className="px-2 py-0.5 text-[10px] font-mono uppercase tracking-wider rounded-full border bg-orange-500/15 text-orange-400 border-orange-500/30">
-                            interrupted
-                        </span>
-                    )}
+                    </AnimatePresence>
                 </div>
 
                 <button
@@ -138,8 +154,8 @@ export default function AssistantInterface({ onDisconnect }: AssistantInterfaceP
                 <main className="flex-1 flex flex-col items-center justify-center gap-6 px-6">
                     <AgentAudioVisualizerAura
                         size="xl"
-                        color="#1FD5F9"
-                        colorShift={0.76}
+                        color="#8B5CF6"
+                        colorShift={0}
                         state={isInterrupted ? "interrupted" : state}
                     />
 

@@ -47,9 +47,9 @@ export default function TTSControls({ onConfig, disabled }: TTSControlsProps) {
                     transition: "all 0.15s",
                     borderWidth: "1px",
                     borderStyle: "solid",
-                    borderColor: active ? "rgba(31,213,249,0.3)" : "var(--hud-border)",
-                    background: active ? "rgba(31,213,249,0.12)" : "rgba(255,255,255,0.03)",
-                    color: active ? "#1FD5F9" : "#52525b",
+                    borderColor: active ? "rgba(139,92,246,0.3)" : "var(--hud-border)",
+                    background: active ? "rgba(139,92,246,0.12)" : "rgba(255,255,255,0.03)",
+                    color: active ? "#8B5CF6" : "#52525b",
                 }}
             >
                 {label}
@@ -116,7 +116,7 @@ export default function TTSControls({ onConfig, disabled }: TTSControlsProps) {
                     max={100}
                     value={consistency}
                     disabled={disabled}
-                    style={{ width: "100%", accentColor: "#1FD5F9" }}
+                    style={{ width: "100%", accentColor: "#8B5CF6" }}
                     onChange={(e) => {
                         const v = Number(e.target.value);
                         setConsistency(v);
