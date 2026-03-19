@@ -59,8 +59,9 @@ class PiperChunkedStream(tts.ChunkedStream):
         def _synthesize() -> bytes:
             try:
                 pcm_parts = []
-                for raw in voice.synthesize_stream_raw(text):
-                    pcm_parts.append(raw)
+                for chunk in voice.synthesize(text):
+                    audio_int16 = (chunk.audio_float_array * 32767).astype(np.int16)
+                    pcm_parts.append(audio_int16.tobytes())
                 return b"".join(pcm_parts)
             except Exception as exc:
                 logger.exception("Piper synthesis failed: %s", exc)
