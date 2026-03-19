@@ -5,11 +5,11 @@ import re
 
 _ABBREVIATIONS = {
     "msrp": "price",
+    "mpg": "miles per gallon",
+    "mph": "miles per hour",
     "awd": "all wheel drive",
     "rwd": "rear wheel drive",
     "fwd": "front wheel drive",
-    "mt": "manual transmission",
-    "at": "automatic transmission",
 }
 
 
