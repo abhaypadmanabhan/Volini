@@ -77,9 +77,12 @@ class QwenTTS(tts.TTS):
         logger.warning(
             "QwenTTS: first synthesis will trigger a ~400 MB model download from HuggingFace — please wait"
         )
+        # float16 causes inf/nan probability tensors on MPS with the 0.6B model
+        # (sharper logit distributions overflow float16's limited exponent range).
+        # float32 is numerically stable; memory cost is acceptable for 0.6B.
         model = Qwen3TTSModel.from_pretrained(
             MODEL_ID,
-            dtype=torch.float16,   # was torch_dtype= (deprecated); float16 fully MPS-accelerated
+            dtype=torch.float32,
         )
         # Qwen3TTSModel is not an nn.Module — move the inner model and sync wrapper.device
         model.model = model.model.to(device)
