@@ -6,22 +6,29 @@
   --color-paywave-border: #27272a;
   --color-paywave-primary: #ffffff;
   --color-paywave-secondary: #a1a1aa;
-  
   --color-paywave-brand: #3b82f6;
   --color-paywave-brand-hover: #2563eb;
-  
   --color-positive: #10b981;
   --color-negative: #ef4444;
 }
 
+:root {
+  --accent: #1FD5F9;
+  --accent-dim: rgba(31, 213, 249, 0.15);
+  --accent-glow: rgba(31, 213, 249, 0.25);
+  --hud-border: rgba(255, 255, 255, 0.06);
+  --surface: rgba(255, 255, 255, 0.03);
+}
+
 @layer base {
   body {
-    background-color: var(--color-paywave-bg);
-    color: var(--color-paywave-primary);
-    font-family: ui-sans-serif, system-ui, sans-serif;
+    background-color: #09090b;
+    color: #ffffff;
+    font-family: var(--font-geist-sans, ui-sans-serif, system-ui, sans-serif);
   }
 }
 
+/* ── Glass surface ────────────────────────────────────────── */
 .glass-panel {
   background: rgba(24, 24, 27, 0.7);
   backdrop-filter: blur(12px);
@@ -29,13 +36,105 @@
   border: 1px solid rgba(255, 255, 255, 0.08);
 }
 
+/* ── HUD corner brackets ──────────────────────────────────── */
+.hud-corner {
+  position: relative;
+}
+.hud-corner::before,
+.hud-corner::after {
+  content: '';
+  position: absolute;
+  width: 14px;
+  height: 14px;
+  border-color: var(--accent);
+  border-style: solid;
+  opacity: 0.3;
+  pointer-events: none;
+  z-index: 1;
+  transition: opacity 0.3s ease;
+}
+.hud-corner::before {
+  top: 0; left: 0;
+  border-width: 1px 0 0 1px;
+}
+.hud-corner::after {
+  bottom: 0; right: 0;
+  border-width: 0 1px 1px 0;
+}
+.hud-corner:hover::before,
+.hud-corner:hover::after {
+  opacity: 0.6;
+}
+
+/* ── Carbon fiber texture ─────────────────────────────────── */
+.carbon-bg {
+  background-image:
+    repeating-linear-gradient(
+      0deg,
+      transparent,
+      transparent 3px,
+      rgba(255, 255, 255, 0.012) 3px,
+      rgba(255, 255, 255, 0.012) 4px
+    );
+}
+
+/* ── Keyframes ────────────────────────────────────────────── */
+
 @keyframes ring-pulse {
-    0%   { transform: scale(1);   opacity: 0.4; }
-    100% { transform: scale(1.8); opacity: 0; }
+  0%   { transform: scale(1);   opacity: 0.4; }
+  100% { transform: scale(1.8); opacity: 0; }
 }
 
 @keyframes blob-jolt {
-    0%   { transform: scale(1.06) rotate(-2deg); }
-    50%  { transform: scale(1.10) rotate(2deg); }
-    100% { transform: scale(1.04) rotate(0deg); }
+  0%   { transform: scale(1.06) rotate(-2deg); }
+  50%  { transform: scale(1.10) rotate(2deg); }
+  100% { transform: scale(1.04) rotate(0deg); }
+}
+
+@keyframes fade-up {
+  from { opacity: 0; transform: translateY(18px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes fade-in {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+
+@keyframes scan-line {
+  0%   { top: -2px; opacity: 0.9; }
+  85%  { opacity: 0.4; }
+  100% { top: 100%; opacity: 0; }
+}
+
+@keyframes speed-line {
+  0%   { transform: scaleX(0); transform-origin: right; opacity: 0; }
+  30%  { opacity: 0.4; }
+  100% { transform: scaleX(1); transform-origin: right; opacity: 0; }
+}
+
+@keyframes accent-pulse {
+  0%, 100% { opacity: 0.6; }
+  50%       { opacity: 1; }
+}
+
+/* ── Animation utilities ──────────────────────────────────── */
+.animate-fade-up {
+  animation: fade-up 0.9s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+.animate-fade-in {
+  animation: fade-in 0.8s ease-in-out both;
+}
+.animate-accent-pulse {
+  animation: accent-pulse 2s ease-in-out infinite;
+}
+
+/* ── Scan-line overlay for thinking state ─────────────────── */
+.scan-line-overlay {
+  position: absolute;
+  left: 0; right: 0;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, var(--accent), transparent);
+  animation: scan-line 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+  pointer-events: none;
 }
