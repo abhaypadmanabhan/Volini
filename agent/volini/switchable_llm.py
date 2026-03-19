@@ -50,6 +50,10 @@ class SwitchableLLM(agents_llm.LLM):
         self._mode = initial_mode
         self._active = self._openai if initial_mode == "openai" else self._ollama
 
+        # Forward metrics_collected from both backends so agent_activity can observe them
+        self._openai.on("metrics_collected", self._on_backend_metrics)
+        self._ollama.on("metrics_collected", self._on_backend_metrics)
+
     # ── LLM interface ─────────────────────────────────────────────────────────
 
     def chat(self, *, chat_ctx, tools=None, **kwargs):
@@ -132,6 +136,9 @@ class SwitchableLLM(agents_llm.LLM):
                 self._latencies.clear()
                 self._do_switch_sync("ollama")
                 self._turns_on_openai = 0
+
+    def _on_backend_metrics(self, ev) -> None:
+        self.emit("metrics_collected", ev)
 
     def _do_switch_sync(self, to: str) -> None:
         prev = self._mode

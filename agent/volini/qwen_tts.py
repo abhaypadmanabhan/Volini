@@ -16,7 +16,7 @@ logger = logging.getLogger(__name__)
 
 SAMPLE_RATE = 24000
 NUM_CHANNELS = 1
-MODEL_ID = "Qwen/Qwen3-TTS-12Hz-1.7B-CustomVoice"
+MODEL_ID = "Qwen/Qwen3-TTS-12Hz-0.6B-CustomVoice"
 DEFAULT_SPEAKER = "Ryan"       # Dynamic male voice, strong rhythmic drive — English native
 VOLINI_INSTRUCT = (            # Short style hint; keeps context shorter than VoiceDesign
     "Speak with car-enthusiast energy. Fast-paced, direct American English."
@@ -75,7 +75,7 @@ class QwenTTS(tts.TTS):
             logger.warning("QwenTTS: MPS not available, falling back to CPU (slower)")
 
         logger.warning(
-            "QwenTTS: first synthesis will trigger a ~1.2 GB model download from HuggingFace — please wait"
+            "QwenTTS: first synthesis will trigger a ~400 MB model download from HuggingFace — please wait"
         )
         model = Qwen3TTSModel.from_pretrained(
             MODEL_ID,

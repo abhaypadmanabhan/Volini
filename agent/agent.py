@@ -148,7 +148,7 @@ async def my_agent(ctx: agents.JobContext):
             "vad": "Silero (local)",
             "stt": f"Faster Whisper {stt_model} (local)",
             "llm": llm_label,
-            "tts": f"Qwen3 TTS 1.7B {qwen_tts_instance._speaker} (MPS)",
+            "tts": f"Qwen3 TTS 0.6B {qwen_tts_instance._speaker} (MPS)",
             "llm_auto": not switchable_llm._manual,
             "llm_provider": switchable_llm._mode,
         })
@@ -217,21 +217,30 @@ async def my_agent(ctx: agents.JobContext):
 
     pending: dict = {}
 
-    async def _flush_pending_if_ready() -> None:
-        await asyncio.sleep(0.1)  # 100 ms grace period for tts_metrics
+    async def _do_publish() -> None:
+        """Publish pending metrics and clear. Caller must verify pending is complete."""
+        tts_ms = pending.get("tts", 0)
+        overall = pending["stt"] + pending["eou"] + pending["llm"] + tts_ms
+        payload = json.dumps({
+            "type": "voice_metrics",
+            "stt": pending["stt"],
+            "eou": pending["eou"],
+            "llm": pending["llm"],
+            "tts": tts_ms,
+            "overall": overall,
+        })
+        await ctx.room.local_participant.publish_data(payload, topic="metrics")
+        logger.debug(
+            "Published voice_metrics: stt=%dms eou=%dms llm=%dms tts=%dms overall=%dms",
+            pending["stt"], pending["eou"], pending["llm"], tts_ms, overall,
+        )
+        pending.clear()
+
+    async def _flush_fallback() -> None:
+        """Fallback: publish after 15 s if tts_metrics never arrived (e.g. interrupted turn)."""
+        await asyncio.sleep(15)
         if all(k in pending for k in ("stt", "eou", "llm")):
-            tts_ms = pending.get("tts", 0)
-            overall = pending["stt"] + pending["eou"] + pending["llm"] + tts_ms
-            payload = json.dumps({
-                "type": "voice_metrics",
-                "stt": pending["stt"],
-                "eou": pending["eou"],
-                "llm": pending["llm"],
-                "tts": tts_ms,
-                "overall": overall,
-            })
-            await ctx.room.local_participant.publish_data(payload, topic="metrics")
-            pending.clear()
+            await _do_publish()
 
     async def _publish_metrics(ev) -> None:
         m = ev.metrics
@@ -243,15 +252,12 @@ async def my_agent(ctx: agents.JobContext):
             llm_ms = round(m.ttft * 1000)
             pending["llm"] = llm_ms
             switchable_llm.record_llm_latency(llm_ms)
-            asyncio.create_task(_flush_pending_if_ready())
+            asyncio.create_task(_flush_fallback())
         elif t == "tts_metrics":
             pending["tts"] = round(m.ttfb * 1000)
-            logger.debug(
-                "Publishing voice_metrics: stt=%dms eou=%dms llm=%dms tts=%dms overall=%dms",
-                pending.get("stt", 0), pending.get("eou", 0),
-                pending.get("llm", 0), pending.get("tts", 0),
-                pending.get("stt", 0) + pending.get("eou", 0) + pending.get("llm", 0) + pending.get("tts", 0),
-            )
+            # tts_metrics is the last event in the pipeline — publish now if we have everything
+            if all(k in pending for k in ("stt", "eou", "llm")):
+                await _do_publish()
 
     def on_metrics(ev) -> None:
         asyncio.create_task(_publish_metrics(ev))
