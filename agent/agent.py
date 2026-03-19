@@ -11,7 +11,7 @@ os.environ["SSL_CERT_DIR"] = certifi.where()
 from dotenv import load_dotenv
 
 from livekit import agents
-from livekit.agents import AgentServer, AgentSession, Agent, function_tool, WorkerOptions
+from livekit.agents import AgentServer, AgentSession, Agent, function_tool
 from livekit.agents.tts import StreamAdapter
 from livekit.agents import tokenize
 from livekit.plugins import openai, silero
@@ -107,7 +107,7 @@ async def _preload_background(research: CarResearchService) -> None:
         logger.warning("Background preload failed: %s", e)
 
 
-server = AgentServer()
+server = AgentServer(num_idle_processes=1, job_memory_warn_mb=2000)
 
 
 @server.rtc_session(agent_name="volini")
@@ -254,4 +254,4 @@ async def my_agent(ctx: agents.JobContext):
 
 
 if __name__ == "__main__":
-    agents.cli.run_app(server, WorkerOptions(num_idle_processes=1, memory_warn_mb=2000))
+    agents.cli.run_app(server)
