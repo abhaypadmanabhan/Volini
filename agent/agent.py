@@ -271,7 +271,7 @@ async def my_agent(ctx: agents.JobContext):
     )
 
     try:
-        await session.wait_for_close()
+        await ctx.wait_for_close()
     finally:
         for t in _fallback_tasks:
             t.cancel()
