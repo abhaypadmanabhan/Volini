@@ -25,7 +25,9 @@ from volini.piper_tts import PiperTTS
 from volini.switchable_llm import SwitchableLLM
 from volini.retriever import CarResearchService
 
-load_dotenv(dotenv_path=os.path.join(os.path.dirname(os.path.abspath(__file__)), ".env"))
+load_dotenv(
+    dotenv_path=os.path.join(os.path.dirname(os.path.abspath(__file__)), ".env")
+)
 
 logger = logging.getLogger("volini-agent")
 logger.setLevel(logging.INFO)
@@ -42,19 +44,26 @@ VOICE RULES (follow strictly):
 - If the user interrupts, drop what you were saying and respond to the new thing in one sentence.
 - Never mention you're an AI unless directly asked."""
 
-_INSTRUCTIONS_NO_TOOLS = _VOICE_RULES + """
+_INSTRUCTIONS_NO_TOOLS = (
+    _VOICE_RULES
+    + """
 
 Answer everything directly from your knowledge. Do NOT call any tools."""
+)
 
-_INSTRUCTIONS_WITH_TOOLS = _VOICE_RULES + """
+_INSTRUCTIONS_WITH_TOOLS = (
+    _VOICE_RULES
+    + """
 
 TOOL POLICY:
 - Answer from knowledge: comparisons, opinions, driving dynamics, heritage, reliability, design, racing history, variants.
 - Call lookup_car_details ONLY for: current MSRP, EPA MPG numbers, active recalls, trim availability, current model year confirmation."""
+)
 
 
 class AssistantNoTools(Agent):
     """Ollama path: no function tools (small models can't reliably handle structured calls)."""
+
     def __init__(self) -> None:
         self._research = CarResearchService()
         super().__init__(instructions=_INSTRUCTIONS_NO_TOOLS)
@@ -62,6 +71,7 @@ class AssistantNoTools(Agent):
 
 class Assistant(Agent):
     """OpenAI path: includes lookup_car_details function tool."""
+
     def __init__(self) -> None:
         self._research = CarResearchService()
         super().__init__(instructions=_INSTRUCTIONS_WITH_TOOLS)
@@ -72,10 +82,12 @@ class Assistant(Agent):
         result = await self._research.answer_question(question)
         return json.dumps(result)
 
+
 async def _preload_background(research: CarResearchService) -> None:
     """Pre-warm the knowledge cache for the most frequently queried cars."""
     try:
         from datetime import datetime, timezone
+
         top_cars = research._knowledge.get_top_cars(n=10)
         if not top_cars:
             return  # First run: empty DB, nothing to preload
@@ -87,13 +99,16 @@ async def _preload_background(research: CarResearchService) -> None:
 
         # Filter to stale entries only
         stale = [
-            (make, model) for make, model in top_cars
+            (make, model)
+            for make, model in top_cars
             if not research._knowledge.is_fresh(make, model)
         ]
 
         if stale:
             logger.info("Preloading cache for %d stale cars: %s", len(stale), stale)
-            tasks = [fetch_full_profile(make, model, lookup_year) for make, model in stale]
+            tasks = [
+                fetch_full_profile(make, model, lookup_year) for make, model in stale
+            ]
             results = await asyncio.gather(*tasks, return_exceptions=True)
 
             for (make, model), result in zip(stale, results):
@@ -101,7 +116,8 @@ async def _preload_background(research: CarResearchService) -> None:
                     logger.warning("Preload failed for %s %s: %s", make, model, result)
                     continue
                 research._knowledge.store_profile(
-                    make, model,
+                    make,
+                    model,
                     nhtsa_data=result.get("nhtsa_data"),
                     fuel_economy=result.get("fuel_economy"),
                     specs=result.get("specs"),
@@ -147,15 +163,17 @@ async def my_agent(ctx: agents.JobContext):
     _initial_mode = os.getenv("LLM_PROVIDER", "openai")
 
     async def _publish_config(llm_label: str) -> None:
-        config_payload = json.dumps({
-            "type": "agent_config",
-            "vad": "Silero (local)",
-            "stt": f"Faster Whisper {stt_model} (local)",
-            "llm": llm_label,
-            "tts": "Piper TTS en_US-ryan-high (ONNX)",
-            "llm_auto": not switchable_llm._manual,
-            "llm_provider": switchable_llm._mode,
-        })
+        config_payload = json.dumps(
+            {
+                "type": "agent_config",
+                "vad": "Silero (local)",
+                "stt": f"Faster Whisper {stt_model} (local)",
+                "llm": llm_label,
+                "tts": "Piper TTS en_US-ryan-high (ONNX)",
+                "llm_auto": not switchable_llm._manual,
+                "llm_provider": switchable_llm._mode,
+            }
+        )
         await ctx.room.local_participant.publish_data(config_payload, topic="config")
 
     switchable_llm = SwitchableLLM(
@@ -169,7 +187,10 @@ async def my_agent(ctx: agents.JobContext):
     session = AgentSession(
         stt=WhisperSTT(model=stt_model, language="en"),
         llm=switchable_llm,
-        tts=StreamAdapter(tts=piper_tts_instance, sentence_tokenizer=tokenize.basic.SentenceTokenizer()),
+        tts=StreamAdapter(
+            tts=piper_tts_instance,
+            sentence_tokenizer=tokenize.basic.SentenceTokenizer(),
+        ),
         vad=silero.VAD.load(min_silence_duration=0.2),
     )
 
@@ -196,8 +217,12 @@ async def my_agent(ctx: agents.JobContext):
         if msg.get("type") != "llm_override":
             return
         new_label = switchable_llm.set_override(msg["provider"], msg.get("model"))
-        logger.info("LLM override from frontend: provider=%s model=%s → %s",
-                    msg["provider"], msg.get("model"), new_label)
+        logger.info(
+            "LLM override from frontend: provider=%s model=%s → %s",
+            msg["provider"],
+            msg.get("model"),
+            new_label,
+        )
         await _publish_config(new_label)
 
     # Pre-warm cache for top-N most-queried cars (runs in background, never blocks greeting)
@@ -212,21 +237,29 @@ async def my_agent(ctx: agents.JobContext):
         tts_ms = pending.get("tts", 0)
         # Wall-clock overall: from end-of-utterance to when TTS finishes
         turn_start = pending.get("turn_start", 0)
-        overall = round((time.time() - turn_start) * 1000) if turn_start else (
-            pending["stt"] + pending["eou"] + pending["llm"] + tts_ms
+        overall = (
+            round((time.time() - turn_start) * 1000)
+            if turn_start
+            else (pending["stt"] + pending["eou"] + pending["llm"] + tts_ms)
         )
-        payload = json.dumps({
-            "type": "voice_metrics",
-            "stt": pending["stt"],
-            "eou": pending["eou"],
-            "llm": pending["llm"],
-            "tts": tts_ms,
-            "overall": overall,
-        })
+        payload = json.dumps(
+            {
+                "type": "voice_metrics",
+                "stt": pending["stt"],
+                "eou": pending["eou"],
+                "llm": pending["llm"],
+                "tts": tts_ms,
+                "overall": overall,
+            }
+        )
         await ctx.room.local_participant.publish_data(payload, topic="metrics")
         logger.debug(
             "Published voice_metrics: stt=%dms eou=%dms llm=%dms tts=%dms overall=%dms",
-            pending["stt"], pending["eou"], pending["llm"], tts_ms, overall,
+            pending["stt"],
+            pending["eou"],
+            pending["llm"],
+            tts_ms,
+            overall,
         )
         pending.clear()
 
@@ -270,8 +303,15 @@ async def my_agent(ctx: agents.JobContext):
         )
     )
 
+    shutdown_event = asyncio.Event()
+
+    async def on_shutdown(reason: str) -> None:
+        shutdown_event.set()
+
+    ctx.add_shutdown_callback(on_shutdown)
+
     try:
-        await ctx.wait_for_close()
+        await shutdown_event.wait()
     finally:
         for t in _fallback_tasks:
             t.cancel()
