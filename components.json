@@ -1,0 +1,6 @@
+{
+  "registries": {
+    "@acme": "https://acme.com/r/{name}.json",
+    "@cultui": "https://cultui.com/r/{name}.json"
+  }
+}
