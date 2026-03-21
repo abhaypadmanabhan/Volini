@@ -13,7 +13,7 @@ class CarRAG:
         self._embedder = EmbeddingModel()
         self._store = CarKnowledgeStore()
 
-    async def get_car_context(self, query: str, n_results: int = 5) -> str:
+    async def get_car_context(self, query: str, n_results: int = 3) -> str:
         """Embed query, search ChromaDB, and return formatted context string.
 
         Returns empty string if the knowledge base is empty (graceful degradation).

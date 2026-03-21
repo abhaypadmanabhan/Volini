@@ -119,9 +119,9 @@ async def my_agent(ctx: agents.JobContext):
     )
 
     llm = openai_plugin.LLM(
-        model="llama-3.3-70b-versatile",
-        base_url="https://api.groq.com/openai/v1",
-        api_key=os.getenv("GROQ_API"),
+        model="llama3.3-70b",
+        base_url="https://api.cerebras.ai/v1",
+        api_key=os.getenv("CEREBRAS_API"),
         temperature=0.7,
         max_completion_tokens=120,
     )
@@ -156,7 +156,7 @@ async def my_agent(ctx: agents.JobContext):
         "type": "agent_config",
         "vad": "Silero (local)",
         "stt": "Deepgram Nova-3",
-        "llm": "Groq Llama 3.3 70B",
+        "llm": "Cerebras Llama 3.3 70B",
         "tts": "Smallest.ai Lightning",
     })
     await ctx.room.local_participant.publish_data(config_payload, topic="config")

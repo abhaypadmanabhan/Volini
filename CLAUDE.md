@@ -69,7 +69,7 @@ Then open http://localhost:3000 and click "Wake up Volini".
 **`agent/.env`** (Python):
 - `LIVEKIT_URL`, `LIVEKIT_API_KEY`, `LIVEKIT_API_SECRET`
 - `DEEPGRAM_API` — Deepgram API key (used for Nova-3 STT and Aura-2 TTS)
-- `GROQ_API` — Groq API key (Llama 3.3 70B via OpenAI-compatible endpoint)
+- `CEREBRAS_API` — Cerebras API key (Llama 3.3 70B via OpenAI-compatible endpoint)
 - `SMALLEST_API` — Smallest.ai API key (reserved for Phase 5 TTS swap)
 
 ## Architecture
@@ -80,7 +80,7 @@ Then open http://localhost:3000 and click "Wake up Volini".
 |-----------|---------------|
 | VAD | Silero (local) — tuned thresholds |
 | STT | Deepgram Nova-3 — streaming cloud, `DEEPGRAM_API` env var |
-| LLM | Groq Llama 3.3 70B via OpenAI-compatible API (`livekit-plugins-openai`) — `GROQ_API` env var |
+| LLM | Cerebras Llama 3.3 70B via OpenAI-compatible API (`livekit-plugins-openai`) — `CEREBRAS_API` env var |
 | TTS | Deepgram Aura-2 `aura-2-andromeda-en` — streaming cloud, `DEEPGRAM_API` env var |
 
 Phase 5 TTS swap: `agent/volini/smallest_tts.py` contains a ready-to-wire Smallest.ai Lightning wrapper.
@@ -96,7 +96,7 @@ Phase 5 TTS swap: `agent/volini/smallest_tts.py` contains a ready-to-wire Smalle
 
 ### Python agent internals (`agent/`)
 
-- **`agent.py`** — entry point; wires `AgentSession` with Deepgram STT, Groq LLM (via openai plugin), Deepgram TTS, Silero VAD; publishes per-turn latency metrics over LiveKit data channel; defines `Assistant(Agent)` with `lookup_car_details` function tool
+- **`agent.py`** — entry point; wires `AgentSession` with Deepgram STT, Cerebras LLM (via openai plugin), Deepgram TTS, Silero VAD; publishes per-turn latency metrics over LiveKit data channel; defines `Assistant(Agent)` with `lookup_car_details` function tool
 - **`volini/smallest_tts.py`** — Smallest.ai Lightning TTS wrapper (Phase 5 swap target); not wired by default
 - **`volini/retriever.py`** — `CarResearchService.answer_question()`: domain-guards the query, resolves a vehicle, hits NHTSA API for models, scrapes DuckDuckGo for MSRP signals, and formats results for speech
 - **`volini/entity_resolver.py`** — fuzzy alias lookup (e.g. "miata" → Mazda MX-5 Miata). Extend `_ALIASES` to support more vehicles
