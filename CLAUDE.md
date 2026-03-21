@@ -68,22 +68,22 @@ Then open http://localhost:3000 and click "Wake up Volini".
 
 **`agent/.env`** (Python):
 - `LIVEKIT_URL`, `LIVEKIT_API_KEY`, `LIVEKIT_API_SECRET`
-- `OPENAI_API_KEY`
-- `LLM_PROVIDER` — `"openai"` (default) or `"ollama"` for local inference
-- `OLLAMA_MODEL` — Ollama model name (default: `qwen3:2b`)
-- `OLLAMA_BASE_URL` — Ollama API base URL (default: `http://localhost:11434/v1`)
-- `STT_MODEL` — faster-whisper model (default: `small.en`; set `distil-whisper/distil-small.en` for faster STT)
+- `DEEPGRAM_API` — Deepgram API key (used for Nova-3 STT and Aura-2 TTS)
+- `GROQ_API` — Groq API key (Llama 3.3 70B via OpenAI-compatible endpoint)
+- `SMALLEST_API` — Smallest.ai API key (reserved for Phase 5 TTS swap)
 
 ## Architecture
 
-### Voice pipeline (current stack)
+### Voice pipeline (v3 — cloud APIs)
 
 | Component | Implementation |
 |-----------|---------------|
-| VAD | Silero (local) |
-| STT | Faster Whisper `small.en` — local CPU, int8 quantized (`agent/volini/stt.py`); override with `STT_MODEL` env var |
-| LLM | OpenAI `gpt-4.1-mini` (default) or Ollama local model — toggled via `LLM_PROVIDER` env var |
-| TTS | Kokoro ONNX `am_michael` wrapped in `StreamAdapter` for sentence-level streaming (`agent/volini/tts.py`) |
+| VAD | Silero (local) — tuned thresholds |
+| STT | Deepgram Nova-3 — streaming cloud, `DEEPGRAM_API` env var |
+| LLM | Groq Llama 3.3 70B via OpenAI-compatible API (`livekit-plugins-openai`) — `GROQ_API` env var |
+| TTS | Deepgram Aura-2 `aura-2-andromeda-en` — streaming cloud, `DEEPGRAM_API` env var |
+
+Phase 5 TTS swap: `agent/volini/smallest_tts.py` contains a ready-to-wire Smallest.ai Lightning wrapper.
 
 ### Request flow
 
@@ -96,7 +96,8 @@ Then open http://localhost:3000 and click "Wake up Volini".
 
 ### Python agent internals (`agent/`)
 
-- **`agent.py`** — entry point; wires `AgentSession` with Faster Whisper STT, OpenAI LLM, Kokoro TTS, Silero VAD; publishes per-turn latency metrics over LiveKit data channel; defines `Assistant(Agent)` with `lookup_car_details` function tool
+- **`agent.py`** — entry point; wires `AgentSession` with Deepgram STT, Groq LLM (via openai plugin), Deepgram TTS, Silero VAD; publishes per-turn latency metrics over LiveKit data channel; defines `Assistant(Agent)` with `lookup_car_details` function tool
+- **`volini/smallest_tts.py`** — Smallest.ai Lightning TTS wrapper (Phase 5 swap target); not wired by default
 - **`volini/retriever.py`** — `CarResearchService.answer_question()`: domain-guards the query, resolves a vehicle, hits NHTSA API for models, scrapes DuckDuckGo for MSRP signals, and formats results for speech
 - **`volini/entity_resolver.py`** — fuzzy alias lookup (e.g. "miata" → Mazda MX-5 Miata). Extend `_ALIASES` to support more vehicles
 - **`volini/domain_guard.py`** — keyword + entity check to classify whether a question is car-related

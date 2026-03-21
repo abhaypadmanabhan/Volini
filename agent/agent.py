@@ -5,10 +5,11 @@ import os
 import json
 import time
 import certifi
-import httpx
 
 faulthandler.enable()  # dumps C-level stack trace to stderr on SIGSEGV
 
+# Keep SSL env vars — retriever.py and entity_resolver.py use urllib.request.urlopen
+# for NHTSA and DuckDuckGo HTTPS calls; these must be set before any network call.
 os.environ["SSL_CERT_FILE"] = certifi.where()
 os.environ["SSL_CERT_DIR"] = certifi.where()
 
@@ -16,13 +17,8 @@ from dotenv import load_dotenv
 
 from livekit import agents
 from livekit.agents import AgentServer, AgentSession, Agent, function_tool
-from livekit.agents.tts import StreamAdapter
-from livekit.agents import tokenize
-from livekit.plugins import openai, silero
+from livekit.plugins import openai as openai_plugin, silero, deepgram
 
-from volini.stt import WhisperSTT
-from volini.piper_tts import PiperTTS
-from volini.switchable_llm import SwitchableLLM
 from volini.retriever import CarResearchService
 
 load_dotenv(
@@ -44,14 +40,7 @@ VOICE RULES (follow strictly):
 - If the user interrupts, drop what you were saying and respond to the new thing in one sentence.
 - Never mention you're an AI unless directly asked."""
 
-_INSTRUCTIONS_NO_TOOLS = (
-    _VOICE_RULES
-    + """
-
-Answer everything directly from your knowledge. Do NOT call any tools."""
-)
-
-_INSTRUCTIONS_WITH_TOOLS = (
+_INSTRUCTIONS = (
     _VOICE_RULES
     + """
 
@@ -61,20 +50,10 @@ TOOL POLICY:
 )
 
 
-class AssistantNoTools(Agent):
-    """Ollama path: no function tools (small models can't reliably handle structured calls)."""
-
-    def __init__(self) -> None:
-        self._research = CarResearchService()
-        super().__init__(instructions=_INSTRUCTIONS_NO_TOOLS)
-
-
 class Assistant(Agent):
-    """OpenAI path: includes lookup_car_details function tool."""
-
     def __init__(self) -> None:
         self._research = CarResearchService()
-        super().__init__(instructions=_INSTRUCTIONS_WITH_TOOLS)
+        super().__init__(instructions=_INSTRUCTIONS)
 
     @function_tool
     async def lookup_car_details(self, question: str) -> str:
@@ -127,15 +106,6 @@ async def _preload_background(research: CarResearchService) -> None:
         logger.warning("Background preload failed: %s", e)
 
 
-async def _prewarm_tts(tts_instance: PiperTTS) -> None:
-    """Load Piper voice model eagerly so the first synthesis has no cold-start delay."""
-    try:
-        await tts_instance._get_voice()
-        logger.info("PiperTTS: model pre-warm complete")
-    except Exception as e:
-        logger.warning("PiperTTS pre-warm failed: %s", e)
-
-
 server = AgentServer(num_idle_processes=1, job_memory_warn_mb=2000)
 
 
@@ -144,90 +114,62 @@ async def my_agent(ctx: agents.JobContext):
 
     logger.info("Setting up AgentSession for room %s", ctx.room.name)
 
-    stt_model = os.getenv("STT_MODEL", "small.en")
-
-    # Build both LLM backends (always, regardless of initial mode)
-    _ollama_llm = openai.LLM(
-        model=os.getenv("OLLAMA_MODEL", "qwen3:2b"),
-        base_url=os.getenv("OLLAMA_BASE_URL", "http://localhost:11434/v1"),
-        api_key="ollama",
-        temperature=0.4,
-        max_completion_tokens=80,
-        timeout=httpx.Timeout(connect=5.0, read=10.0, write=5.0, pool=5.0),
-    )
-    _openai_llm = openai.LLM(
-        model="gpt-4.1",
-        temperature=0.3,
-        max_completion_tokens=200,
-    )
-    _initial_mode = os.getenv("LLM_PROVIDER", "openai")
-
-    async def _publish_config(llm_label: str) -> None:
-        config_payload = json.dumps(
-            {
-                "type": "agent_config",
-                "vad": "Silero (local)",
-                "stt": f"Faster Whisper {stt_model} (local)",
-                "llm": llm_label,
-                "tts": "Piper TTS en_US-ryan-high (ONNX)",
-                "llm_auto": not switchable_llm._manual,
-                "llm_provider": switchable_llm._mode,
-            }
-        )
-        await ctx.room.local_participant.publish_data(config_payload, topic="config")
-
-    switchable_llm = SwitchableLLM(
-        ollama_llm=_ollama_llm,
-        openai_llm=_openai_llm,
-        initial_mode=_initial_mode,
-        on_switch=_publish_config,
+    stt = deepgram.STT(
+        model="nova-3",
+        language="en",
+        smart_format=True,
+        no_delay=True,
+        interim_results=True,
+        endpointing_ms=25,
+        api_key=os.getenv("DEEPGRAM_API"),
     )
 
-    piper_tts_instance = PiperTTS()
+    llm = openai_plugin.LLM(
+        model="llama-3.3-70b-versatile",
+        base_url="https://api.groq.com/openai/v1",
+        api_key=os.getenv("GROQ_API"),
+        temperature=0.7,
+        max_completion_tokens=120,
+    )
+
+    tts = deepgram.TTS(
+        model="aura-2-andromeda-en",
+        api_key=os.getenv("DEEPGRAM_API"),
+        # SELF-HOST: swap to SmallestTTS from volini/smallest_tts.py for Phase 5
+    )
+
+    vad = silero.VAD.load(
+        min_speech_duration=0.05,
+        min_silence_duration=0.3,
+        prefix_padding_duration=0.1,
+        activation_threshold=0.5,
+    )
+
     session = AgentSession(
-        stt=WhisperSTT(model=stt_model, language="en"),
-        llm=switchable_llm,
-        tts=StreamAdapter(
-            tts=piper_tts_instance,
-            sentence_tokenizer=tokenize.basic.SentenceTokenizer(),
-        ),
-        vad=silero.VAD.load(min_silence_duration=0.2),
+        stt=stt,
+        llm=llm,
+        tts=tts,
+        vad=vad,
     )
 
-    # Always use the full Assistant — tool suppression is handled inside SwitchableLLM.chat()
     agent = Assistant()
     await session.start(
         room=ctx.room,
         agent=agent,
     )
 
-    # Publish initial agent config
-    await _publish_config(switchable_llm.current_label())
-
-    # Wire data channel handlers
-    # data_received emits a single DataPacket(data, participant, topic, kind)
-    @ctx.room.on("data_received")
-    def on_data(dp) -> None:
-        topic = dp.topic or ""
-        payload = bytes(dp.data)
-        if topic == "llm_override":
-            asyncio.create_task(_handle_llm_override(json.loads(payload)))
-
-    async def _handle_llm_override(msg: dict) -> None:
-        if msg.get("type") != "llm_override":
-            return
-        new_label = switchable_llm.set_override(msg["provider"], msg.get("model"))
-        logger.info(
-            "LLM override from frontend: provider=%s model=%s → %s",
-            msg["provider"],
-            msg.get("model"),
-            new_label,
-        )
-        await _publish_config(new_label)
+    # Publish static agent config for the frontend metrics panel
+    config_payload = json.dumps({
+        "type": "agent_config",
+        "vad": "Silero (local)",
+        "stt": "Deepgram Nova-3",
+        "llm": "Groq Llama 3.3 70B",
+        "tts": "Deepgram Aura-2",
+    })
+    await ctx.room.local_participant.publish_data(config_payload, topic="config")
 
     # Pre-warm cache for top-N most-queried cars (runs in background, never blocks greeting)
     asyncio.create_task(_preload_background(agent._research))
-    asyncio.create_task(_prewarm_tts(piper_tts_instance))
 
     pending: dict = {}
     _fallback_tasks: list[asyncio.Task] = []
@@ -279,7 +221,6 @@ async def my_agent(ctx: agents.JobContext):
         elif t == "llm_metrics":
             llm_ms = round(m.ttft * 1000)
             pending["llm"] = llm_ms
-            switchable_llm.record_llm_latency(llm_ms)
             t = asyncio.create_task(_flush_fallback())
             _fallback_tasks.append(t)
         elif t == "tts_metrics":
