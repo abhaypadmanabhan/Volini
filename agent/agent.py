@@ -18,6 +18,9 @@ from dotenv import load_dotenv
 from livekit import agents
 from livekit.agents import AgentServer, AgentSession, Agent, function_tool
 from livekit.plugins import openai as openai_plugin, silero, deepgram
+from livekit.agents.tts import StreamAdapter
+from livekit.agents import tokenize
+from volini.smallest_tts import SmallestTTS
 
 from volini.retriever import CarResearchService
 from prompts import build_system_prompt
@@ -116,10 +119,9 @@ async def my_agent(ctx: agents.JobContext):
         max_completion_tokens=120,
     )
 
-    tts = deepgram.TTS(
-        model="aura-2-andromeda-en",
-        api_key=os.getenv("DEEPGRAM_API"),
-        # SELF-HOST: swap to SmallestTTS from volini/smallest_tts.py for Phase 5
+    tts = StreamAdapter(
+        tts=SmallestTTS(),
+        sentence_tokenizer=tokenize.basic.SentenceTokenizer(),
     )
 
     vad = silero.VAD.load(
@@ -148,7 +150,7 @@ async def my_agent(ctx: agents.JobContext):
         "vad": "Silero (local)",
         "stt": "Deepgram Nova-3",
         "llm": "Groq Llama 3.3 70B",
-        "tts": "Deepgram Aura-2",
+        "tts": "Smallest.ai Lightning",
     })
     await ctx.room.local_participant.publish_data(config_payload, topic="config")
 

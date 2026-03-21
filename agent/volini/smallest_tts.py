@@ -21,19 +21,26 @@ Phase 5 swap instructions (when ready to go self-hosted):
 Note: SmallestTTS declares streaming=False, so StreamAdapter is required.
 """
 
+import logging
 import os
+import ssl
 
 import aiohttp
+import certifi
 
 from livekit.agents import tts, DEFAULT_API_CONNECT_OPTIONS
 from volini.voice_style import format_for_speech
+
+logger = logging.getLogger("volini.smallest_tts")
+
+_SSL_CTX = ssl.create_default_context(cafile=certifi.where())
 
 
 class SmallestTTS(tts.TTS):
     def __init__(
         self,
         *,
-        voice_id: str = "emily",
+        voice_id: str = "eleanor",
         sample_rate: int = 24000,
         speed: float = 1.0,
         api_key: str | None = None,
@@ -46,7 +53,7 @@ class SmallestTTS(tts.TTS):
         self._voice_id = voice_id
         self._speed = speed
         self._api_key = api_key or os.getenv("SMALLEST_API")
-        self._url = "https://waves-api.smallest.ai/api/v1/lightning/get_speech"
+        self._url = "https://api.smallest.ai/waves/v1/lightning-v2/get_speech"
 
     def synthesize(
         self, text: str, *, conn_options=DEFAULT_API_CONNECT_OPTIONS
@@ -60,22 +67,28 @@ class _SmallestStream(tts.ChunkedStream):
         if not text.strip():
             return
 
+        payload = {
+            "text": text,
+            "voice_id": self._tts._voice_id,
+            "sample_rate": 24000,
+            "speed": self._tts._speed,
+            "output_format": "pcm",
+        }
+        logger.debug("Smallest.ai request: voice=%s text=%r", self._tts._voice_id, text[:80])
         async with aiohttp.ClientSession() as session:
             async with session.post(
                 self._tts._url,
+                ssl=_SSL_CTX,
                 headers={
                     "Authorization": f"Bearer {self._tts._api_key}",
                     "Content-Type": "application/json",
                 },
-                json={
-                    "text": text,
-                    "voice_id": self._tts._voice_id,
-                    "sample_rate": 24000,
-                    "speed": self._tts._speed,
-                    "add_wav_header": False,
-                },
+                json=payload,
             ) as resp:
-                resp.raise_for_status()
+                if not resp.ok:
+                    body = await resp.text()
+                    logger.error("Smallest.ai TTS %d: %s | payload: %s", resp.status, body, payload)
+                    resp.raise_for_status()
                 pcm_bytes = await resp.read()
 
         # Raw int16 PCM at 24000 Hz mono — no header, push directly
