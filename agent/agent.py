@@ -24,6 +24,7 @@ from volini.smallest_tts import SmallestTTS
 
 from volini.retriever import CarResearchService
 from prompts import build_system_prompt
+from knowledge.rag_pipeline import CarRAG
 
 load_dotenv(
     dotenv_path=os.path.join(os.path.dirname(os.path.abspath(__file__)), ".env")
@@ -40,7 +41,13 @@ _INSTRUCTIONS = build_system_prompt(
 class Assistant(Agent):
     def __init__(self) -> None:
         self._research = CarResearchService()
+        self._rag = CarRAG()
         super().__init__(instructions=_INSTRUCTIONS)
+
+    @function_tool
+    async def query_knowledge_base(self, question: str) -> str:
+        """Search the car knowledge base for specs, comparisons, pros and cons, buying advice, modifications, reliability notes, and enthusiast context. Call this before answering any specific car question."""
+        return await self._rag.get_car_context(question)
 
     @function_tool
     async def lookup_car_details(self, question: str) -> str:

@@ -54,3 +54,6 @@ opencode.json
 
 # local database
 *.db
+
+# RAG vector store (generated, rebuilt via scripts/build_knowledge_base.py)
+agent/knowledge/chroma_db/
