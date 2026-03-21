@@ -48,3 +48,9 @@ __pycache__/
 
 # local git worktrees
 /.worktrees/
+
+# opencode config (user-specific)
+opencode.json
+
+# local database
+*.db
