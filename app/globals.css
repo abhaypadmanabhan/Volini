@@ -148,6 +148,21 @@
   50%       { opacity: 1; }
 }
 
+@keyframes shine-spin {
+  from { background: conic-gradient(from 0deg,   transparent 0deg, #8B5CF6, #EC4899, #8B5CF6, transparent 60deg); }
+  to   { background: conic-gradient(from 360deg, transparent 0deg, #8B5CF6, #EC4899, #8B5CF6, transparent 60deg); }
+}
+
+@property --angle {
+  syntax: "<angle>";
+  initial-value: 0deg;
+  inherits: false;
+}
+
+@keyframes border-angle {
+  to { --angle: 360deg; }
+}
+
 /* ── Animation utilities ──────────────────────────────────── */
 .animate-fade-up {
   animation: fade-up 0.9s cubic-bezier(0.16, 1, 0.3, 1) both;

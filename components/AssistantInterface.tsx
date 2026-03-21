@@ -7,9 +7,7 @@ import { useState, useRef, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { clsx } from "clsx";
 import MetricsPanel, { TurnMetrics } from "./MetricsPanel";
-import LLMSelector from "./LLMSelector";
 import AgentAudioVisualizerAura from "./agents-ui/agent-audio-visualizer-aura";
-import { useRoomContext } from "@livekit/components-react";
 
 interface AssistantInterfaceProps {
     onDisconnect: () => void;
@@ -18,10 +16,10 @@ interface AssistantInterfaceProps {
 type VoiceState = "connecting" | "listening" | "speaking" | "thinking" | "initializing" | string;
 
 const STATE_LABEL: Record<string, string> = {
-    connecting:    "Connecting…",
-    initializing:  "Initializing…",
+    connecting:    "Connecting",
+    initializing:  "Initializing",
     listening:     "Listening",
-    thinking:      "Thinking",
+    thinking:      "Processing",
     speaking:      "Speaking",
 };
 
@@ -31,16 +29,22 @@ const STATE_BADGE_COLOR: Record<string, string> = {
     thinking:  "bg-amber-500/20 text-amber-400 border-amber-500/30",
 };
 
+// Color per provider type — shown in header pills
+const PROVIDER_PILLS = (config: Record<string, string> | null) => [
+    { label: "STT", value: config?.stt ?? "Deepgram Nova-3", color: "#34d399" },
+    { label: "LLM", value: config?.llm ?? "Groq 70B",        color: "#8B5CF6" },
+    { label: "TTS", value: config?.tts ?? "Deepgram Aura-2", color: "#EC4899" },
+];
+
 export default function AssistantInterface({ onDisconnect }: AssistantInterfaceProps) {
-    const { state, audioTrack } = useVoiceAssistant();
+    const { state } = useVoiceAssistant();
     const [turns, setTurns] = useState<TurnMetrics[]>([]);
     const [agentConfig, setAgentConfig] = useState<Record<string, string> | null>(null);
 
-    /* ── Data channel listeners (preserved exactly) ── */
+    /* ── Data channel listeners ── */
     useDataChannel("metrics", (msg) => {
         try {
             const data = JSON.parse(new TextDecoder().decode(msg.payload));
-            console.debug("voice_metrics received:", data);
             if (data.type === "voice_metrics") {
                 const { stt, eou, llm, tts, overall } = data;
                 setTurns((prev) => [...prev, { stt, eou, llm, tts, overall }]);
@@ -57,35 +61,27 @@ export default function AssistantInterface({ onDisconnect }: AssistantInterfaceP
                     stt: data.stt,
                     llm: data.llm,
                     tts: data.tts,
-                    llm_auto: String(data.llm_auto ?? true),
-                    llm_provider: data.llm_provider ?? "openai",
                 });
             }
         } catch {}
     });
 
-    const room = useRoomContext();
-    const sendLLMOverride = (payload: Uint8Array) => {
-        room.localParticipant.publishData(payload, { topic: "llm_override" });
-    };
-
-    /* ── Interrupted state detection (preserved exactly) ── */
+    /* ── Interrupted state detection ── */
     const prevStateRef = useRef<VoiceState>("");
-    const prevStateTimeRef = useRef<number>(Date.now());
+    const prevStateTimeRef = useRef<number>(0);
     const [isInterrupted, setIsInterrupted] = useState(false);
-    const isInterruptedRef = useRef<boolean>(false);
 
     useEffect(() => {
         const now = Date.now();
         if (prevStateRef.current === "speaking" && state === "listening") {
             const elapsed = now - prevStateTimeRef.current;
             if (elapsed < 1500) {
-                setIsInterrupted(true);
-                isInterruptedRef.current = true;
-                setTimeout(() => {
-                    setIsInterrupted(false);
-                    isInterruptedRef.current = false;
-                }, 800);
+                // Defer setState to avoid synchronous update-in-effect warning
+                const t = setTimeout(() => {
+                    setIsInterrupted(true);
+                    setTimeout(() => setIsInterrupted(false), 800);
+                }, 0);
+                return () => clearTimeout(t);
             }
         }
         prevStateRef.current = state;
@@ -95,11 +91,23 @@ export default function AssistantInterface({ onDisconnect }: AssistantInterfaceP
     const badgeClass = STATE_BADGE_COLOR[state] ?? "bg-zinc-800 text-zinc-500 border-zinc-700";
     const stateLabel = STATE_LABEL[state] ?? state;
 
+    const statusText = isInterrupted
+        ? "Interrupted"
+        : state === "speaking"    ? "Volini is speaking"
+        : state === "listening"   ? "Listening"
+        : state === "thinking"    ? "Processing"
+        : (state === "connecting" || state === "initializing") ? "Starting up"
+        : "—";
+
     return (
         <div className="h-screen w-full flex flex-col bg-[#09090b] overflow-hidden carbon-bg">
 
-            {/* ── Top bar ──────────────────────────────────────── */}
-            <header className="flex items-center justify-between px-6 py-4 border-b" style={{ borderColor: "var(--hud-border)" }}>
+            {/* ── Top bar ── */}
+            <header
+                className="flex items-center justify-between px-6 py-4 border-b"
+                style={{ borderColor: "var(--hud-border)" }}
+            >
+                {/* Left: wordmark + state badge */}
                 <div className="flex items-center gap-3">
                     <span className="text-sm font-mono font-bold tracking-[0.12em] text-white">
                         VOLINI
@@ -134,19 +142,47 @@ export default function AssistantInterface({ onDisconnect }: AssistantInterfaceP
                     </AnimatePresence>
                 </div>
 
-                <button
-                    onClick={onDisconnect}
-                    className="w-8 h-8 flex items-center justify-center rounded-lg text-zinc-600 hover:text-red-400 hover:bg-red-500/10 transition-all duration-200"
-                    title="Disconnect"
-                >
-                    <Power className="w-4 h-4" />
-                </button>
+                {/* Right: provider pills + disconnect */}
+                <div className="flex items-center gap-3">
+                    {/* Provider pills — fade in once agent sends config */}
+                    <AnimatePresence>
+                        <motion.div
+                            className="hidden sm:flex items-center gap-1.5"
+                            initial={{ opacity: 0 }}
+                            animate={{ opacity: 1 }}
+                            transition={{ duration: 0.4 }}
+                        >
+                            {PROVIDER_PILLS(agentConfig).map(({ label, value, color }) => (
+                                <span
+                                    key={label}
+                                    className="flex items-center gap-1 px-2 py-0.5 text-[9px] font-mono rounded-full border"
+                                    style={{
+                                        background: `${color}12`,
+                                        color,
+                                        borderColor: `${color}30`,
+                                    }}
+                                >
+                                    <span style={{ opacity: 0.6 }}>{label}</span>
+                                    <span>{value}</span>
+                                </span>
+                            ))}
+                        </motion.div>
+                    </AnimatePresence>
+
+                    <button
+                        onClick={onDisconnect}
+                        className="w-8 h-8 flex items-center justify-center rounded-lg text-zinc-600 hover:text-red-400 hover:bg-red-500/10 transition-all duration-200"
+                        title="Disconnect"
+                    >
+                        <Power className="w-4 h-4" />
+                    </button>
+                </div>
             </header>
 
-            {/* ── Body: center aura + right sidebar ─────────────── */}
+            {/* ── Body ── */}
             <div className="flex flex-1 overflow-hidden">
 
-                {/* Center column — aura */}
+                {/* Center — visualizer */}
                 <main className="flex-1 flex flex-col items-center justify-center gap-6 px-6">
                     <AgentAudioVisualizerAura
                         size="xl"
@@ -155,56 +191,50 @@ export default function AssistantInterface({ onDisconnect }: AssistantInterfaceP
                         state={isInterrupted ? "interrupted" : state}
                     />
 
-                    <p
-                        className="text-sm font-mono tracking-wider transition-all duration-500"
+                    <motion.p
+                        key={statusText}
+                        initial={{ opacity: 0, y: 4 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        transition={{ duration: 0.2 }}
+                        className="text-sm font-mono tracking-wider"
                         style={{ color: "#52525b" }}
                     >
-                        {isInterrupted
-                            ? "Interrupted"
-                            : state === "speaking"
-                            ? "Volini is speaking…"
-                            : state === "listening"
-                            ? "Listening…"
-                            : state === "thinking"
-                            ? "Thinking…"
-                            : state === "connecting" || state === "initializing"
-                            ? "Starting up…"
-                            : "—"}
-                    </p>
+                        {statusText}
+                    </motion.p>
 
-                    {/* Mic toggle */}
-                    <div
-                        className="flex items-center justify-center px-3 py-2 rounded-full"
-                        style={{
-                            background: "rgba(255,255,255,0.03)",
-                            border: "1px solid var(--hud-border)",
-                        }}
-                    >
-                        <TrackToggle
-                            source={Track.Source.Microphone}
-                            showIcon={true}
-                            className="flex h-10 w-10 items-center justify-center rounded-full text-zinc-400 hover:text-white hover:bg-white/10 transition-all duration-200 active:scale-95"
-                        />
+                    {/* Mic toggle — contextual glow ring */}
+                    <div className="relative group">
+                        {state === "speaking" && (
+                            <div className="absolute inset-0 rounded-full bg-violet-500/20 blur-lg animate-pulse" />
+                        )}
+                        <div
+                            className="relative flex items-center justify-center px-4 py-3 rounded-full transition-all duration-300 group-hover:scale-105"
+                            style={{
+                                background: "rgba(255,255,255,0.04)",
+                                border: "1px solid var(--hud-border)",
+                                boxShadow: state === "listening"
+                                    ? "0 0 20px rgba(52,211,153,0.18)"
+                                    : state === "speaking"
+                                    ? "0 0 20px rgba(139,92,246,0.18)"
+                                    : "none",
+                                transition: "box-shadow 0.4s ease",
+                            }}
+                        >
+                            <TrackToggle
+                                source={Track.Source.Microphone}
+                                showIcon={true}
+                                className="flex h-10 w-10 items-center justify-center rounded-full text-zinc-400 hover:text-white transition-all duration-200 active:scale-95"
+                            />
+                        </div>
                     </div>
                 </main>
 
-                {/* Right sidebar — always-visible metrics + controls */}
+                {/* Right sidebar — metrics */}
                 <aside
                     className="w-80 shrink-0 flex flex-col overflow-y-auto border-l p-4 gap-4"
                     style={{ borderColor: "var(--hud-border)" }}
                 >
-                    <MetricsPanel
-                        turns={turns}
-                        agentConfig={agentConfig}
-                        llmSelectorSlot={
-                            <LLMSelector
-                                agentConfig={agentConfig}
-                                turns={turns}
-                                onOverride={sendLLMOverride}
-                                disabled={!agentConfig}
-                            />
-                        }
-                    />
+                    <MetricsPanel turns={turns} agentConfig={agentConfig} />
                 </aside>
             </div>
         </div>
