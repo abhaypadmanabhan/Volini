@@ -4,17 +4,11 @@ import * as React from "react"
 import { motion, useInView } from "framer-motion"
 import { useRef } from "react"
 import { Button } from "@/components/ui/button"
-import { useRouter } from "next/navigation"
 import { ArrowRight, Github } from "lucide-react"
 
-export default function CTASection() {
-  const router = useRouter()
+export default function CTASection({ onConnect, connecting }: { onConnect: () => void; connecting: boolean }) {
   const sectionRef = useRef<HTMLDivElement>(null)
   const isInView = useInView(sectionRef, { once: true, margin: "-100px" })
-
-  const handleWakeVolini = () => {
-    router.push("/")
-  }
 
   return (
     <section ref={sectionRef} className="relative bg-[#09090b] py-32 overflow-hidden">
@@ -55,12 +49,13 @@ export default function CTASection() {
             <div className="relative group">
               <div className="absolute -inset-1 rounded-xl bg-gradient-to-r from-violet-500 via-pink-500 to-violet-500 opacity-50 blur transition-all duration-500 group-hover:opacity-75 group-hover:blur-lg" />
               <Button
-                onClick={handleWakeVolini}
+                onClick={onConnect}
+                disabled={connecting}
                 size="lg"
-                className="relative bg-[#09090b] hover:bg-[#1a1a1b] text-white font-semibold px-10 py-8 text-lg transition-all duration-200 hover:scale-105 border-0"
+                className="relative bg-[#09090b] hover:bg-[#1a1a1b] text-white font-semibold px-10 py-8 text-lg transition-all duration-200 hover:scale-105 border-0 disabled:opacity-60 disabled:cursor-not-allowed"
               >
                 <span className="flex items-center gap-3">
-                  Wake up Volini
+                  {connecting ? "Connecting..." : "Wake up Volini"}
                   <ArrowRight className="h-5 w-5 transition-transform group-hover:translate-x-1" />
                 </span>
               </Button>

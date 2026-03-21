@@ -10,18 +10,18 @@ import B2BSection from "@/components/landing/B2BSection"
 import CTASection from "@/components/landing/CTASection"
 import AssistantInterface from "@/components/AssistantInterface"
 
-function LandingPage() {
+function LandingPage({ onConnect, connecting }: { onConnect: () => void; connecting: boolean }) {
   return (
     <div className="min-h-screen bg-[#09090b] text-white overflow-x-hidden">
       <HeroSection />
-      <DemoSection />
+      <DemoSection onConnect={onConnect} connecting={connecting} />
       <StatsSection />
       <FeaturesSection />
       <B2BSection />
-      <CTASection />
+      <CTASection onConnect={onConnect} connecting={connecting} />
       <footer className="px-6 py-8 text-center border-t border-white/5">
         <p className="text-xs font-mono text-white/30">
-          © 2026 Volini · Built with LiveKit, OpenAI, Faster Whisper, Kokoro TTS
+          © 2026 Volini · Built with LiveKit, Groq, Deepgram Nova-3, Deepgram Aura-2
         </p>
       </footer>
     </div>
@@ -73,5 +73,5 @@ export default function Home() {
     )
   }
 
-  return <LandingPage />
+  return <LandingPage onConnect={connect} connecting={connecting} />
 }

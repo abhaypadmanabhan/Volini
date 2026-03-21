@@ -5,8 +5,6 @@ import { motion, AnimatePresence } from "framer-motion"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import DemoAudioVisualizer from "@/components/landing/DemoAudioVisualizer"
-import { useRouter } from "next/navigation"
-
 interface Message {
   id: string
   role: "user" | "volini"
@@ -45,8 +43,7 @@ const F40_COMPARE: Message[] = [
   },
 ]
 
-export default function DemoSection() {
-  const router = useRouter()
+export default function DemoSection({ onConnect, connecting }: { onConnect: () => void; connecting: boolean }) {
   const [conversation, setConversation] = React.useState<Message[]>([])
   const [activeTab, setActiveTab] = React.useState<"intro" | "compare">("intro")
   const [currentMessageIndex, setCurrentMessageIndex] = React.useState(0)
@@ -110,9 +107,6 @@ export default function DemoSection() {
     []
   )
 
-  const handleWakeVolini = () => {
-    router.push("/")
-  }
 
   return (
     <section
@@ -261,11 +255,12 @@ export default function DemoSection() {
 
             <div className="mt-6 flex justify-center">
               <Button
-                onClick={handleWakeVolini}
+                onClick={onConnect}
+                disabled={connecting}
                 size="lg"
-                className="bg-pink-600 hover:bg-pink-500 text-white font-semibold px-10 py-6 text-lg transition-all duration-200 hover:scale-105 hover:shadow-[0_0_30px_rgba(236,72,153,0.5)]"
+                className="bg-pink-600 hover:bg-pink-500 text-white font-semibold px-10 py-6 text-lg transition-all duration-200 hover:scale-105 hover:shadow-[0_0_30px_rgba(236,72,153,0.5)] disabled:opacity-60 disabled:cursor-not-allowed"
               >
-                Wake up Volini
+                {connecting ? "Connecting..." : "Wake up Volini"}
               </Button>
             </div>
           </div>
