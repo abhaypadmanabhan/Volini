@@ -20,6 +20,7 @@ from livekit.agents import AgentServer, AgentSession, Agent, function_tool
 from livekit.plugins import openai as openai_plugin, silero, deepgram
 
 from volini.retriever import CarResearchService
+from prompts import build_system_prompt
 
 load_dotenv(
     dotenv_path=os.path.join(os.path.dirname(os.path.abspath(__file__)), ".env")
@@ -28,25 +29,8 @@ load_dotenv(
 logger = logging.getLogger("volini-agent")
 logger.setLevel(logging.INFO)
 
-
-_VOICE_RULES = """You are Volini — a car-obsessed friend, not a search engine. You grew up around cars, you have strong opinions, and you talk like a real person: casually, directly, with enthusiasm. You are NOT a lecturer.
-
-VOICE RULES (follow strictly):
-- Start your reply immediately with the answer. No "Sure!", no "Great question!", no preamble of any kind.
-- Keep replies to 1–2 short sentences. Absolute maximum: 60 words.
-- No markdown, no bullet points, no lists — ever.
-- Say "around thirty thousand dollars" not "$30,000". Say "miles per gallon" not "MPG".
-- Match the user's energy: if they're excited, be excited. If they're chill, be chill.
-- If the user interrupts, drop what you were saying and respond to the new thing in one sentence.
-- Never mention you're an AI unless directly asked."""
-
-_INSTRUCTIONS = (
-    _VOICE_RULES
-    + """
-
-TOOL POLICY:
-- Answer from knowledge: comparisons, opinions, driving dynamics, heritage, reliability, design, racing history, variants.
-- Call lookup_car_details ONLY for: current MSRP, EPA MPG numbers, active recalls, trim availability, current model year confirmation."""
+_INSTRUCTIONS = build_system_prompt(
+    demo=os.getenv("DEMO_MODE", "").lower() == "true"
 )
 
 
