@@ -44,14 +44,15 @@ class Assistant(Agent):
         self._rag = CarRAG()
         super().__init__(instructions=_INSTRUCTIONS)
 
-    @function_tool
+    # Tools temporarily disabled — llama3.1-8b outputs tool calls as plain text
+    # instead of proper API tool_calls. Re-enable @function_tool when gpt-oss-120b
+    # free-tier access is restored.
     async def query_knowledge_base(self, question: str) -> str:
-        """Search the car knowledge base for specs, comparisons, pros and cons, buying advice, modifications, reliability notes, and enthusiast context. Call this before answering any specific car question."""
+        """Search the car knowledge base."""
         return await self._rag.get_car_context(question)
 
-    @function_tool
     async def lookup_car_details(self, question: str) -> str:
-        """Fetch live data for: current MSRP/price, EPA MPG numbers, recall status, trim availability, or current model year confirmation. Do NOT call this for opinions, comparisons, history, or driving dynamics — answer those directly."""
+        """Fetch live car data."""
         result = await self._research.answer_question(question)
         return json.dumps(result)
 
@@ -119,7 +120,7 @@ async def my_agent(ctx: agents.JobContext):
     )
 
     llm = openai_plugin.LLM(
-        model="gpt-oss-120b",
+        model="llama3.1-8b",
         base_url="https://api.cerebras.ai/v1",
         api_key=os.getenv("CEREBRAS_API"),
         temperature=0.7,
@@ -156,7 +157,7 @@ async def my_agent(ctx: agents.JobContext):
         "type": "agent_config",
         "vad": "Silero (local)",
         "stt": "Deepgram Nova-3",
-        "llm": "Cerebras GPT-OSS 120B",
+        "llm": "Cerebras Llama 3.1 8B",
         "tts": "Smallest.ai Lightning",
     })
     await ctx.room.local_participant.publish_data(config_payload, topic="config")
