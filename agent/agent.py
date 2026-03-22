@@ -119,11 +119,11 @@ async def my_agent(ctx: agents.JobContext):
     )
 
     llm = openai_plugin.LLM(
-        model="llama3.3-70b",
+        model="gpt-oss-120b",
         base_url="https://api.cerebras.ai/v1",
         api_key=os.getenv("CEREBRAS_API"),
         temperature=0.7,
-        max_completion_tokens=120,
+        max_completion_tokens=350,
     )
 
     tts = StreamAdapter(
@@ -133,7 +133,7 @@ async def my_agent(ctx: agents.JobContext):
 
     vad = silero.VAD.load(
         min_speech_duration=0.05,
-        min_silence_duration=0.3,
+        min_silence_duration=0.2,
         prefix_padding_duration=0.1,
         activation_threshold=0.5,
     )
@@ -156,7 +156,7 @@ async def my_agent(ctx: agents.JobContext):
         "type": "agent_config",
         "vad": "Silero (local)",
         "stt": "Deepgram Nova-3",
-        "llm": "Cerebras Llama 3.3 70B",
+        "llm": "Cerebras GPT-OSS 120B",
         "tts": "Smallest.ai Lightning",
     })
     await ctx.room.local_participant.publish_data(config_payload, topic="config")
@@ -208,6 +208,7 @@ async def my_agent(ctx: agents.JobContext):
         m = ev.metrics
         t = m.type
         if t == "eou_metrics":
+            pending.clear()
             pending["stt"] = round(m.transcription_delay * 1000)
             pending["eou"] = round(m.end_of_utterance_delay * 1000)
             pending["turn_start"] = time.time()
