@@ -119,7 +119,7 @@ async def my_agent(ctx: agents.JobContext):
     )
 
     llm = openai_plugin.LLM(
-        model="gpt-oss-120b",
+        model="llama3.1-8b",
         base_url="https://api.cerebras.ai/v1",
         api_key=os.getenv("CEREBRAS_API"),
         temperature=0.7,
@@ -156,7 +156,7 @@ async def my_agent(ctx: agents.JobContext):
         "type": "agent_config",
         "vad": "Silero (local)",
         "stt": "Deepgram Nova-3",
-        "llm": "Cerebras GPT-OSS 120B",
+        "llm": "Cerebras Llama 3.1 8B",
         "tts": "Smallest.ai Lightning",
     })
     await ctx.room.local_participant.publish_data(config_payload, topic="config")
