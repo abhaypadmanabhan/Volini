@@ -64,7 +64,8 @@ class SmallestTTS(tts.TTS):
 class _SmallestStream(tts.ChunkedStream):
     async def _run(self, output_emitter: tts.AudioEmitter) -> None:
         text = format_for_speech(self.input_text)
-        if not text.strip() or text.strip().startswith("<function="):
+        stripped = text.strip()
+        if not stripped or stripped.startswith("<function=") or stripped.startswith('{"type": "function"'):
             return
 
         payload = {
